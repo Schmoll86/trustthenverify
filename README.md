@@ -2,9 +2,6 @@
 
 > The trust registry and scoring protocol for AI agents. Think FICO score + Yelp + LinkedIn, purpose-built for agents, backed by cryptographic proofs.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
----
 
 ## What This Is
 
