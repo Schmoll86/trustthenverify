@@ -1,16 +1,26 @@
 {
-  "name": "@billyv2/sdk",
-  "version": "0.0.1",
-  "description": "TypeScript SDK for the TrustThenVerify agent trust registry",
+  "name": "@trustthenverify/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the TrustThenVerify escrow + verification protocol (v2)",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
+    "build:watch": "tsc --watch",
     "test": "vitest"
   },
-  "keywords": ["ai-agents", "trust", "trustthenverify"],
-  "dependencies": {},
+  "keywords": [
+    "ai-agents",
+    "trust",
+    "escrow",
+    "verification",
+    "trustthenverify"
+  ],
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "@noble/secp256k1": "^3.0.0"
+  },
   "devDependencies": {
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"

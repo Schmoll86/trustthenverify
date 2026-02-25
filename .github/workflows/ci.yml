@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build SDK
+        run: npm run build --workspace=packages/sdk
+
+      - name: Typecheck API
+        run: npm run typecheck --workspace=packages/api
+
+      - name: Test SDK
+        run: npm test --workspace=packages/sdk -- --run
+
+      - name: Test API
+        run: npm test --workspace=packages/api -- --run

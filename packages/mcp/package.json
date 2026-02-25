@@ -1,7 +1,7 @@
 {
-  "name": "@billyv2/mcp",
-  "version": "0.0.1",
-  "description": "MCP server for TrustThenVerify — gives AI agents native trust tools",
+  "name": "@trustthenverify/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for TrustThenVerify — gives AI agents native escrow + verification tools (v2)",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -9,8 +9,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0",
-    "@billyv2/sdk": "*"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@trustthenverify/sdk": "*"
   },
   "devDependencies": {
     "tsx": "^4.16.0",

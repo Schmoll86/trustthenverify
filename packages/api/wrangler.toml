@@ -2,10 +2,24 @@ name = "trustthenverify-api"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-[[kv_namespaces]]
-binding = "KV_TRUST_SCORES"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+# Async jobs: Argus Codex refinement, oracle dispatch, timeout sweeps
+[[queues.producers]]
+binding = "QUEUE"
+queue = "ttv-async-jobs"
 
-[[r2_buckets]]
-binding = "R2_EVIDENCE_ARCHIVE"
-bucket_name = "ttv-evidence-archive"
+[[queues.consumers]]
+queue = "ttv-async-jobs"
+max_batch_size = 10
+max_retries = 3
+
+# Escrow timeout sweep (Phase 1)
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Workers AI — Tier 2 semantic constraints (§3.1.2)
+[ai]
+binding = "AI"
+
+[vars]
+API_VERSION = "v2"
+BASE_RPC_URL = "https://mainnet.base.org"

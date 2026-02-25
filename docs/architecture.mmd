@@ -1,23 +1,30 @@
 ```mermaid
 graph TD
-    A[Client SDK] --> |submit challenges| B(Cloudflare API)
-    B --> |store events| C[Supabase DB]
-    B --> |cache scores| D[Cloudflare KV]
-    B --> |process payments| E[Stripe/Alby NWC]
-    B --> |verify identity| F[Nostr NIP-98]
-    G[Operator Model] --> |spawn agents| B
-    H[Trust Scoring Engine] --> |calculate| I[Score Dimensions]
-    I --> J[Identity]
-    I --> K[Economic]
-    I --> L[Social]
-    I --> M[Behavioral]
-    N[Blockchain Anchoring] --> |daily roots| C
-    O[R2 Storage] --> |archive data| C
+    SDK["Client SDK<br/>secp256k1 signing"] --> API["Cloudflare Workers + Hono<br/>API + Verification Gateway"]
+    MCP["MCP Server"] --> SDK
 
-    classDef component fill:#f9f9f9,stroke:#333;
+    API --> DB["Supabase PostgreSQL<br/>Agents, Policies, Escrows"]
+    API --> QUEUE["Cloudflare Queues<br/>Argus Codex, Timeouts"]
+    API --> WAI["Workers AI<br/>Tier 2 Semantic Verification"]
+
+    API --> |"Stripe mode"| STRIPE["Stripe Connect<br/>Training Wheels Escrow"]
+    API --> |"On-chain mode Phase 4"| BASE["Base L2 Smart Contracts<br/>USDC Escrow"]
+
+    API --> VERIFY["AR Constraint Solver<br/>Tier 1 Deterministic under 100ms<br/>Tier 2 Semantic under 5s"]
+
+    QUEUE --> ARGUS["Argus Codex<br/>Adversarial Policy Refinement"]
+    SDK --> |"publish attestations"| NOSTR["Nostr Relays<br/>Peer-to-Peer Observations"]
+    SDK --> |"local observations"| LOCAL["Local Trust Store<br/>suggestCollateral"]
+
+    classDef core fill:#e8f4fd,stroke:#2196F3;
     classDef storage fill:#e0ffe0,stroke:#228B22;
-    classDef crypto fill:#fff0f5,stroke:#FF69B4;
+    classDef settlement fill:#fff3e0,stroke:#FF9800;
+    classDef verification fill:#fce4ec,stroke:#E91E63;
+    classDef p2p fill:#f3e5f5,stroke:#9C27B0;
 
-    class C,D,O storage
-    class E,F,N crypto
+    class API,SDK,MCP core
+    class DB,QUEUE storage
+    class STRIPE,BASE settlement
+    class VERIFY,WAI,ARGUS verification
+    class NOSTR,LOCAL p2p
 ```

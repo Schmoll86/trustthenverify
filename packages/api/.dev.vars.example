@@ -2,17 +2,15 @@
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=
 
-# Stripe (use sk_test_ in dev)
-STRIPE_SECRET_KEY=
+# Stripe Connect (training wheels escrow — §8.2)
+STRIPE_CONNECT_SECRET_KEY=
 
-# Chain RPCs
-ETH_RPC_URL=https://mainnet.base.org
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+# Base L2 (on-chain escrow — Phase 4)
+BASE_RPC_URL=https://mainnet.base.org
+ESCROW_FACTORY_ADDRESS=
 
-# Base L2 anchoring
-CHAIN_ANCHOR_PRIVATE_KEY=
-CHAIN_ANCHOR_CONTRACT=
+# Verification Gateway signing key (§8.1.1)
+GATEWAY_PRIVATE_KEY=
 
-# Alby (Lightning via NWC)
-ALBY_CLIENT_ID=
-ALBY_CLIENT_SECRET=
+# Sandbox API keys (comma-separated)
+SANDBOX_KEYS=test_sandbox_key_123
