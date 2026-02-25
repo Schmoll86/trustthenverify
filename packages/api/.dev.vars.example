@@ -1,0 +1,18 @@
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Stripe (use sk_test_ in dev)
+STRIPE_SECRET_KEY=
+
+# Chain RPCs
+ETH_RPC_URL=https://mainnet.base.org
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
+# Base L2 anchoring
+CHAIN_ANCHOR_PRIVATE_KEY=
+CHAIN_ANCHOR_CONTRACT=
+
+# Alby (Lightning via NWC)
+ALBY_CLIENT_ID=
+ALBY_CLIENT_SECRET=

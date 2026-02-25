@@ -1,0 +1,16 @@
+{
+  "name": "billyv2",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/api",
+    "packages/sdk",
+    "packages/mcp"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:sdk": "npm run build:watch --workspace=packages/sdk",
+    "dev:mcp": "npm run dev --workspace=packages/mcp"
+  }
+}
