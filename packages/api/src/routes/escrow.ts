@@ -7,6 +7,8 @@ import { sha256Hex } from '@trustthenverify/sdk'
 import { canTransition } from '../lib/escrow-state'
 import type { StripeService } from '../lib/stripe'
 import { RealStripeService } from '../lib/stripe'
+import type { GatewayService } from '../lib/gateway'
+import { RealGatewayService } from '../lib/gateway'
 import type { Escrow } from '@trustthenverify/sdk'
 import type { EscrowRow } from '../lib/types'
 
@@ -18,6 +20,7 @@ type AppEnv = {
     sandboxMode?: boolean
     rawBody?: string
     stripe?: StripeService
+    gateway?: GatewayService
   }
 }
 
@@ -28,6 +31,17 @@ function getStripe(c: { env: Env; get(key: 'stripe'): StripeService | undefined 
   const injected = c.get('stripe')
   if (injected) return injected
   return new RealStripeService(c.env.STRIPE_SECRET_KEY)
+}
+
+/** Get or create GatewayService. Tests inject via c.set('gateway', mock). */
+function getGateway(c: { env: Env; get(key: 'gateway'): GatewayService | undefined }): GatewayService {
+  const injected = c.get('gateway')
+  if (injected) return injected
+  const db = createDb(c.env)
+  return new RealGatewayService(c.env.GATEWAY_PRIVATE_KEY, async (policyId: string) => {
+    const { data } = await db.from('policies').select('*').eq('id', policyId).single()
+    return data as { id: string; status: string; formal_spec: Record<string, unknown> } | null
+  })
 }
 
 // ── GET /escrow/:id — fetch escrow status (public, no auth) ──────────────────
@@ -255,11 +269,15 @@ escrow.post('/:id/deliver', async (c) => {
 
   const proof = sha256Hex(JSON.stringify(body.deliverable))
 
+  // Increment delivery_attempts
+  const attempts = ((escrowRow as unknown as Record<string, unknown>).delivery_attempts as number ?? 0) + 1
+
   const { data: updated } = await db
     .from('escrows')
     .update({
       status: 'delivered',
       proof,
+      delivery_attempts: attempts,
     })
     .eq('id', escrowId)
     .select()
@@ -267,6 +285,83 @@ escrow.post('/:id/deliver', async (c) => {
 
   if (!updated) {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
+  }
+
+  // Automated verification for non-buyer_confirm methods
+  const method = escrowRow.verification_method
+  if (method === 'automated_reasoning' || method === 'schema_validation') {
+    const gateway = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
+
+    const vResult = await gateway.verify({
+      escrowId,
+      deliverable: body.deliverable,
+      verificationMethod: method,
+      policyId: escrowRow.policy_id,
+      taskSpec: escrowRow.task_spec,
+    })
+
+    // Store verification record
+    await db.from('verifications').insert({
+      escrow_id: escrowId,
+      method,
+      policy_id: escrowRow.policy_id,
+      result: vResult.result,
+      constraints_total: vResult.constraintsTotal,
+      constraints_passed: vResult.constraintsPassed,
+      failure_details: vResult.failures.length > 0 ? { failures: vResult.failures } : null,
+      proof_hash: proof,
+      gateway_signature: vResult.gatewaySignature,
+      verified_at: vResult.verifiedAt,
+    })
+
+    if (vResult.result === 'pass') {
+      // Auto-release funds
+      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+      if (escrowRow.stripe_escrow_id) {
+        await stripe.releaseFunds({
+          stripeEscrowId: escrowRow.stripe_escrow_id,
+          sellerAmountCents: escrowRow.amount_cents + escrowRow.seller_collateral,
+        })
+      }
+      const now = new Date().toISOString()
+      const { data: released } = await db
+        .from('escrows')
+        .update({ status: 'released', completed_at: now })
+        .eq('id', escrowId)
+        .select()
+        .single()
+
+      return success(c, snakeToCamel<Escrow>(released ?? updated))
+    }
+
+    if (vResult.result === 'fail') {
+      // Auto-fail: refund buyer, burn seller collateral
+      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+      if (escrowRow.stripe_escrow_id) {
+        await stripe.refundBuyerAndBurnCollateral({
+          stripeEscrowId: escrowRow.stripe_escrow_id,
+          buyerRefundCents: escrowRow.amount_cents,
+        })
+      }
+      const now = new Date().toISOString()
+      const { data: failed } = await db
+        .from('escrows')
+        .update({ status: 'failed', completed_at: now })
+        .eq('id', escrowId)
+        .select()
+        .single()
+
+      return success(c, snakeToCamel<Escrow>(failed ?? updated))
+    }
+
+    // result === 'error': stay delivered, allow re-delivery
+    if (attempts >= 3) {
+      // Fallback to buyer_confirm after 3 failed attempts
+      await db.from('escrows').update({ verification_method: 'buyer_confirm' }).eq('id', escrowId)
+    }
+
+    // Return the delivered state with error info
+    return error(c, 422, 'VERIFICATION_ERROR', vResult.failures.map(f => f.error).join('; '))
   }
 
   return success(c, snakeToCamel<Escrow>(updated))

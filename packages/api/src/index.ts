@@ -8,6 +8,7 @@ import { verify } from './routes/verify'
 import { attestations } from './routes/attestations'
 import { disputes } from './routes/disputes'
 import { handleEscrowTimeout } from './cron/escrow-timeout'
+import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 
 type AppEnv = {
   Bindings: Env
@@ -39,6 +40,18 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, env: Env) {
     await handleEscrowTimeout(env)
+  },
+  async queue(batch: MessageBatch<ArgusQueueMessage>, env: Env) {
+    for (const msg of batch.messages) {
+      try {
+        if (msg.body.type === 'argus_refine') {
+          await handleArgusMessage(msg.body, env)
+        }
+        msg.ack()
+      } catch {
+        msg.retry()
+      }
+    }
   },
 }
 

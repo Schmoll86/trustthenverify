@@ -67,6 +67,16 @@ export function createMockDb() {
         updateData = data
         return chain
       },
+      delete() {
+        // Mark for deletion — applied in then()
+        return {
+          eq(field: string, value: unknown) {
+            const before = table.rows.length
+            table.rows = table.rows.filter((r) => r[field] !== value)
+            return Promise.resolve({ data: null, error: null, count: before - table.rows.length })
+          },
+        }
+      },
       eq(field: string, value: unknown) {
         eqFilters.push({ field, value })
         filteredRows = filteredRows.filter((r) => r[field] === value)

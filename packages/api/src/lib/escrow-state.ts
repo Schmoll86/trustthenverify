@@ -2,6 +2,7 @@
  * Escrow state machine — pure functions per SPEC-v2 §2.2.
  *
  * States: proposed → active → delivered → released
+ *                                       → failed (verification fail)
  *                                       → burned
  *         proposed → expired
  *         active → expired
@@ -9,6 +10,7 @@
  *         delivered → burned (dispute)
  *
  * In Stripe mode (Phase 1), accept is atomic: proposed → active.
+ * Phase 2 adds automated verification: delivered → released / failed.
  */
 
 export type EscrowStatus =
@@ -16,15 +18,18 @@ export type EscrowStatus =
   | 'active'
   | 'delivered'
   | 'released'
+  | 'failed'
   | 'burned'
   | 'expired'
 
 export type EscrowAction =
-  | 'accept'    // seller accepts + funds atomically
-  | 'deliver'   // seller submits deliverable
-  | 'confirm'   // buyer confirms delivery
-  | 'dispute'   // either party disputes
-  | 'timeout'   // cron: expires_at reached
+  | 'accept'       // seller accepts + funds atomically
+  | 'deliver'      // seller submits deliverable
+  | 'confirm'      // buyer confirms delivery
+  | 'verify_pass'  // automated verification passed
+  | 'verify_fail'  // automated verification failed
+  | 'dispute'      // either party disputes
+  | 'timeout'      // cron: expires_at reached
 
 const TRANSITIONS: Record<string, EscrowStatus> = {
   'proposed:accept': 'active',
@@ -33,6 +38,8 @@ const TRANSITIONS: Record<string, EscrowStatus> = {
   'active:dispute': 'burned',
   'active:timeout': 'expired',
   'delivered:confirm': 'released',
+  'delivered:verify_pass': 'released',
+  'delivered:verify_fail': 'failed',
   'delivered:dispute': 'burned',
 }
 
@@ -53,5 +60,5 @@ export function nextStatus(from: EscrowStatus, action: EscrowAction): EscrowStat
 
 /** Check if a status is terminal (no further transitions possible). */
 export function isTerminal(status: EscrowStatus): boolean {
-  return status === 'released' || status === 'burned' || status === 'expired'
+  return status === 'released' || status === 'failed' || status === 'burned' || status === 'expired'
 }

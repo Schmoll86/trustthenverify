@@ -54,6 +54,8 @@ export interface EscrowRow {
   funded_at: string | null
   completed_at: string | null
   expires_at: string
+  delivery_attempts: number
+  timeout_seconds: number
 }
 
 export interface VerificationRow {
@@ -81,6 +83,23 @@ export interface DisputeRow {
   status: string
   created_at: string
   resolved_at: string | null
+}
+
+export interface RefinementRow {
+  id: string
+  policy_id: string
+  status: string  // running | complete | failed
+  budget: number
+  current_round: number
+  last_exploit_round: number
+  consecutive_clean: number
+  working_spec: Record<string, unknown>
+  exploits: Record<string, unknown>[]
+  coverage: number | null
+  tier2_introduced: boolean
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
 }
 
 export interface AttestationRow {
