@@ -12,9 +12,15 @@ export interface Env {
   STRIPE_SECRET_KEY: string
   AI: WorkersAI
   QUEUE: { send(message: unknown): Promise<void> }
+  NOSTR_RELAY_URLS?: string  // optional, comma-separated relay WebSocket URLs
   OPENROUTER_API_KEY?: string
   TRANSLATOR_MODEL?: string    // default: 'moonshotai/kimi-k2.5'
   CROSS_VALIDATOR_MODEL?: string // default: 'google/gemini-2.5-flash'
+  // Phase 4: on-chain escrow (Base L2)
+  BASE_RPC_URL?: string         // default: 'https://mainnet.base.org'
+  ESCROW_FACTORY_ADDRESS?: string
+  BASE_CHAIN_ID?: string        // default: '8453' (Base mainnet)
+  GATEWAY_EOA_PRIVATE_KEY?: string  // secp256k1 key for Ethereum tx signing
 }
 
 /** Create a Supabase client per-request from Workers env bindings. */

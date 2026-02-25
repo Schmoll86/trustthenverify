@@ -56,6 +56,29 @@ export interface EscrowRow {
   expires_at: string
   delivery_attempts: number
   timeout_seconds: number
+  // Phase 4: on-chain escrow fields
+  funding_mode: 'stripe' | 'onchain'
+  buyer_address: string | null
+  seller_address: string | null
+  buyer_funded: boolean
+  seller_funded: boolean
+  chain_id: number | null
+  tx_hash: string | null
+}
+
+export interface PaymentChannelRow {
+  id: string
+  buyer_id: string
+  seller_id: string
+  buyer_address: string
+  seller_address: string
+  channel_address: string | null
+  deposit_amount: number
+  spent_amount: number
+  chain_id: number
+  status: string
+  expiry_at: string
+  created_at: string
 }
 
 export interface VerificationRow {

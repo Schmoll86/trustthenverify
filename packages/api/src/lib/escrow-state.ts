@@ -5,16 +5,23 @@
  *                                       → failed (verification fail)
  *                                       → burned
  *         proposed → expired
+ *         proposed → accepted (on-chain: seller accepts, awaiting funding)
+ *         accepted → funded (on-chain: both parties funded)
+ *         accepted → expired (funding window timeout)
+ *         funded → active (on-chain: cron confirms funding)
  *         active → expired
  *         active → burned (dispute)
  *         delivered → burned (dispute)
  *
  * In Stripe mode (Phase 1), accept is atomic: proposed → active.
+ * In on-chain mode (Phase 4), accept → accepted → funded → active.
  * Phase 2 adds automated verification: delivered → released / failed.
  */
 
 export type EscrowStatus =
   | 'proposed'
+  | 'accepted'     // on-chain: seller accepted, awaiting funding
+  | 'funded'       // on-chain: both parties funded, awaiting activation
   | 'active'
   | 'delivered'
   | 'released'
@@ -23,17 +30,24 @@ export type EscrowStatus =
   | 'expired'
 
 export type EscrowAction =
-  | 'accept'       // seller accepts + funds atomically
-  | 'deliver'      // seller submits deliverable
-  | 'confirm'      // buyer confirms delivery
-  | 'verify_pass'  // automated verification passed
-  | 'verify_fail'  // automated verification failed
-  | 'dispute'      // either party disputes
-  | 'timeout'      // cron: expires_at reached
+  | 'accept'          // seller accepts + funds atomically (Stripe)
+  | 'accept_onchain'  // seller accepts, contract deployed (on-chain)
+  | 'fund'            // both parties funded (on-chain)
+  | 'activate'        // cron confirms funding → active (on-chain)
+  | 'deliver'         // seller submits deliverable
+  | 'confirm'         // buyer confirms delivery
+  | 'verify_pass'     // automated verification passed
+  | 'verify_fail'     // automated verification failed
+  | 'dispute'         // either party disputes
+  | 'timeout'         // cron: expires_at reached
 
 const TRANSITIONS: Record<string, EscrowStatus> = {
   'proposed:accept': 'active',
+  'proposed:accept_onchain': 'accepted',
   'proposed:timeout': 'expired',
+  'accepted:fund': 'funded',
+  'accepted:timeout': 'expired',
+  'funded:activate': 'active',
   'active:deliver': 'delivered',
   'active:dispute': 'burned',
   'active:timeout': 'expired',

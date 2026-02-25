@@ -20,8 +20,18 @@ crons = ["*/5 * * * *"]
 [ai]
 binding = "AI"
 
+# Secrets (set via `wrangler secret put`):
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GATEWAY_PRIVATE_KEY, SANDBOX_KEYS
+# STRIPE_SECRET_KEY, OPENROUTER_API_KEY
+# NOSTR_RELAY_URLS — comma-separated WebSocket relay URLs (optional, e.g. "wss://relay.damus.io,wss://nos.lol")
+
 [vars]
 API_VERSION = "v2"
 BASE_RPC_URL = "https://mainnet.base.org"
+BASE_CHAIN_ID = "8453"
 TRANSLATOR_MODEL = "moonshotai/kimi-k2.5"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"
+
+# Secrets (set via `wrangler secret put`):
+# ESCROW_FACTORY_ADDRESS — deployed EscrowFactory contract address
+# GATEWAY_EOA_PRIVATE_KEY — secp256k1 key for on-chain gateway signatures

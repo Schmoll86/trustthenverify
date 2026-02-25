@@ -9,6 +9,8 @@ import type { StripeService } from '../lib/stripe'
 import { RealStripeService } from '../lib/stripe'
 import type { GatewayService } from '../lib/gateway'
 import { RealGatewayService } from '../lib/gateway'
+import type { OnchainService } from '../lib/onchain'
+import { RealOnchainService } from '../lib/onchain'
 import type { Escrow } from '@trustthenverify/sdk'
 import type { EscrowRow } from '../lib/types'
 
@@ -21,6 +23,7 @@ type AppEnv = {
     rawBody?: string
     stripe?: StripeService
     gateway?: GatewayService
+    onchain?: OnchainService
   }
 }
 
@@ -42,6 +45,18 @@ function getGateway(c: { env: Env; get(key: 'gateway'): GatewayService | undefin
     const { data } = await db.from('policies').select('*').eq('id', policyId).single()
     return data as { id: string; status: string; formal_spec: Record<string, unknown> } | null
   })
+}
+
+/** Get or create OnchainService. Tests inject via c.set('onchain', mock). */
+function getOnchain(c: { env: Env; get(key: 'onchain'): OnchainService | undefined }): OnchainService {
+  const injected = c.get('onchain')
+  if (injected) return injected
+  return new RealOnchainService(
+    c.env.BASE_RPC_URL ?? 'https://mainnet.base.org',
+    c.env.ESCROW_FACTORY_ADDRESS ?? '',
+    c.env.GATEWAY_EOA_PRIVATE_KEY ?? '',
+    parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10),
+  )
 }
 
 // ── GET /escrow/:id — fetch escrow status (public, no auth) ──────────────────
@@ -76,6 +91,9 @@ escrow.post('/propose', async (c) => {
     verificationMethod?: string
     timeoutSeconds?: number
     disputeResolution?: string
+    fundingMode?: 'stripe' | 'onchain'
+    buyerAddress?: string
+    sellerAddress?: string
   }
   try {
     body = JSON.parse(rawBody || '{}')
@@ -97,6 +115,18 @@ escrow.post('/propose', async (c) => {
   }
   if (!body.taskSpec || typeof body.taskSpec !== 'object') {
     return error(c, 400, 'INVALID_PARAMS', 'taskSpec is required')
+  }
+
+  const fundingMode = body.fundingMode ?? 'stripe'
+
+  // On-chain mode requires addresses
+  if (fundingMode === 'onchain') {
+    if (!body.buyerAddress) {
+      return error(c, 400, 'INVALID_PARAMS', 'buyerAddress is required for on-chain escrow')
+    }
+    if (!body.sellerAddress) {
+      return error(c, 400, 'INVALID_PARAMS', 'sellerAddress is required for on-chain escrow')
+    }
   }
 
   const db = createDb(c.env)
@@ -137,6 +167,10 @@ escrow.post('/propose', async (c) => {
       status: 'proposed',
       timeout_seconds: timeoutSeconds,
       expires_at: expiresAt,
+      funding_mode: fundingMode,
+      buyer_address: body.buyerAddress ?? null,
+      seller_address: body.sellerAddress ?? null,
+      chain_id: fundingMode === 'onchain' ? parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10) : null,
     })
     .select()
     .single()
@@ -186,7 +220,45 @@ escrow.post('/:id/accept', async (c) => {
     return error(c, 409, 'EXPIRED', 'Escrow proposal has expired')
   }
 
-  // Capture funds via Stripe
+  const fundingMode = (escrowRow as unknown as Record<string, unknown>).funding_mode as string ?? 'stripe'
+
+  if (fundingMode === 'onchain') {
+    // On-chain mode: proposed → accepted, deploy contract
+    const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+
+    const { contractAddress, txHash } = await onchain.deployEscrow({
+      escrowId: escrowRow.id,
+      buyer: (escrowRow as unknown as Record<string, unknown>).buyer_address as string,
+      seller: (escrowRow as unknown as Record<string, unknown>).seller_address as string,
+      amountUsdc: BigInt(escrowRow.amount_cents) * 10000n, // cents → 6 decimal USDC
+      collateralUsdc: BigInt(escrowRow.seller_collateral) * 10000n,
+      deadlineTimestamp: Math.floor(Date.now() / 1000) + (escrowRow.timeout_seconds ?? 3600),
+    })
+
+    // Funding window: 30 min for agents to fund the contract
+    const fundingWindowMs = 30 * 60 * 1000
+    const fundingExpiry = new Date(Date.now() + fundingWindowMs).toISOString()
+
+    const { data: updated } = await db
+      .from('escrows')
+      .update({
+        status: 'accepted',
+        contract_address: contractAddress,
+        tx_hash: txHash,
+        expires_at: fundingExpiry,
+      })
+      .eq('id', escrowId)
+      .select()
+      .single()
+
+    if (!updated) {
+      return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
+    }
+
+    return success(c, snakeToCamel<Escrow>(updated))
+  }
+
+  // Stripe mode: proposed → active (atomic accept + fund)
   const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
   const { stripeEscrowId } = await stripe.captureEscrowFunds({
     buyerAmountCents: escrowRow.amount_cents,
@@ -194,7 +266,6 @@ escrow.post('/:id/accept', async (c) => {
     escrowId,
   })
 
-  // Atomic transition: proposed → active (Stripe mode per §2.2)
   const timeoutSeconds = (row as Record<string, unknown>).timeout_seconds as number | undefined ?? 3600
   const newExpiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString()
 
@@ -206,6 +277,77 @@ escrow.post('/:id/accept', async (c) => {
       funded_at: new Date().toISOString(),
       expires_at: newExpiresAt,
     })
+    .eq('id', escrowId)
+    .select()
+    .single()
+
+  if (!updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
+  }
+
+  return success(c, snakeToCamel<Escrow>(updated))
+})
+
+// ── POST /escrow/:id/fund — agent notifies API of on-chain funding ────────
+
+escrow.post('/:id/fund', async (c) => {
+  const escrowId = c.req.param('id')
+  const callerId = c.get('agentId')
+  if (!callerId) {
+    return error(c, 401, 'UNAUTHORIZED', 'Authentication required')
+  }
+
+  const db = createDb(c.env)
+
+  const { data: row } = await db
+    .from('escrows')
+    .select('*')
+    .eq('id', escrowId)
+    .single()
+
+  if (!row) {
+    return error(c, 404, 'NOT_FOUND', `Escrow not found: ${escrowId}`)
+  }
+
+  const escrowRow = row as EscrowRow
+
+  // Must be on-chain mode
+  if (escrowRow.funding_mode !== 'onchain') {
+    return error(c, 400, 'INVALID_PARAMS', 'Fund endpoint is only for on-chain escrows')
+  }
+
+  // Must be buyer or seller
+  if (escrowRow.buyer_id !== callerId && escrowRow.seller_id !== callerId) {
+    return error(c, 403, 'FORBIDDEN', 'Only buyer or seller can notify funding')
+  }
+
+  // Must be in accepted state
+  if (!canTransition(escrowRow.status as 'accepted', 'fund')) {
+    return error(c, 409, 'INVALID_STATE', `Cannot fund in status: ${escrowRow.status}`)
+  }
+
+  // Check on-chain funding status
+  const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+  const funding = await onchain.checkFunding(escrowRow.contract_address ?? '')
+
+  const updateFields: Record<string, unknown> = {
+    buyer_funded: funding.buyerFunded,
+    seller_funded: funding.sellerFunded,
+  }
+
+  if (funding.buyerFunded && funding.sellerFunded) {
+    // Both funded → activate
+    const timeoutSeconds = escrowRow.timeout_seconds ?? 3600
+    const newExpiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString()
+
+    updateFields.status = 'active'
+    updateFields.funded_at = new Date().toISOString()
+    updateFields.expires_at = newExpiresAt
+  }
+
+  const { data: updated } = await db
+    .from('escrows')
+    .update(updateFields)
     .eq('id', escrowId)
     .select()
     .single()
@@ -316,8 +458,20 @@ escrow.post('/:id/deliver', async (c) => {
 
     if (vResult.result === 'pass') {
       // Auto-release funds
-      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-      if (escrowRow.stripe_escrow_id) {
+      if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+        const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+        const gw = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
+        if (gw.signForChain) {
+          const sig = await gw.signForChain({
+            escrowId, resultDigest: proof, contractAddress: escrowRow.contract_address, action: 'release',
+          })
+          await onchain.gatewayRelease({
+            contractAddress: escrowRow.contract_address, escrowId,
+            resultDigest: proof, v: sig.v, r: sig.r, s: sig.s,
+          })
+        }
+      } else if (escrowRow.stripe_escrow_id) {
+        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
         await stripe.releaseFunds({
           stripeEscrowId: escrowRow.stripe_escrow_id,
           sellerAmountCents: escrowRow.amount_cents + escrowRow.seller_collateral,
@@ -336,8 +490,20 @@ escrow.post('/:id/deliver', async (c) => {
 
     if (vResult.result === 'fail') {
       // Auto-fail: refund buyer, burn seller collateral
-      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-      if (escrowRow.stripe_escrow_id) {
+      if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+        const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+        const gw = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
+        if (gw.signForChain) {
+          const sig = await gw.signForChain({
+            escrowId, resultDigest: proof, contractAddress: escrowRow.contract_address, action: 'fail',
+          })
+          await onchain.gatewayFail({
+            contractAddress: escrowRow.contract_address, escrowId,
+            resultDigest: proof, v: sig.v, r: sig.r, s: sig.s,
+          })
+        }
+      } else if (escrowRow.stripe_escrow_id) {
+        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
         await stripe.refundBuyerAndBurnCollateral({
           stripeEscrowId: escrowRow.stripe_escrow_id,
           buyerRefundCents: escrowRow.amount_cents,
@@ -405,9 +571,13 @@ escrow.post('/:id/confirm', async (c) => {
     return error(c, 400, 'INVALID_PARAMS', 'Manual confirmation only available for buyer_confirm verification method')
   }
 
-  // Release funds
-  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-  if (escrowRow.stripe_escrow_id) {
+  // Release funds — branch by funding mode
+  if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+    // On-chain: buyer confirms directly on contract (this API call just records the verification)
+    // The actual fund transfer happens on-chain via confirmDelivery()
+    // We record it here and update our DB state
+  } else if (escrowRow.stripe_escrow_id) {
+    const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
     await stripe.releaseFunds({
       stripeEscrowId: escrowRow.stripe_escrow_id,
       sellerAmountCents: escrowRow.amount_cents + escrowRow.seller_collateral,
@@ -495,8 +665,11 @@ escrow.post('/:id/dispute', async (c) => {
 
   // Burn mode: immediate burn
   if (escrowRow.dispute_resolution === 'burn') {
-    const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-    if (escrowRow.stripe_escrow_id) {
+    if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+      // On-chain dispute happens directly on contract — just update DB state
+      // Agents call dispute() on the contract themselves
+    } else if (escrowRow.stripe_escrow_id) {
+      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
       await stripe.burnFunds({ stripeEscrowId: escrowRow.stripe_escrow_id })
     }
 

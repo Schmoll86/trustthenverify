@@ -23,6 +23,9 @@ import { ObservationStore } from './observations.js'
 export { ObservationStore } from './observations.js'
 export type { Observation } from './observations.js'
 
+export { signChannelPayment, verifyChannelPayment } from './channels.js'
+export type { ChannelPayment } from './channels.js'
+
 const DEFAULT_API_URL = 'https://api.trustthenverify.com/v2'
 const SANDBOX_API_URL = 'https://sandbox.trustthenverify.com/v2'
 
@@ -98,6 +101,8 @@ export type VerificationMethod =
   | 'buyer_confirm'
   | 'zkml_proof'
 
+export type FundingMode = 'stripe' | 'onchain'
+
 export interface Escrow {
   id: string
   contractAddress: string | null
@@ -117,6 +122,29 @@ export interface Escrow {
   fundedAt: string | null
   completedAt: string | null
   expiresAt: string
+  // Phase 4: on-chain escrow fields
+  fundingMode: FundingMode
+  buyerAddress: string | null
+  sellerAddress: string | null
+  buyerFunded: boolean
+  sellerFunded: boolean
+  chainId: number | null
+  txHash: string | null
+}
+
+export interface PaymentChannel {
+  id: string
+  buyerId: string
+  sellerId: string
+  buyerAddress: string
+  sellerAddress: string
+  channelAddress: string | null
+  depositAmount: number
+  spentAmount: number
+  chainId: number
+  status: string
+  expiryAt: string
+  createdAt: string
 }
 
 export type VerificationOutcome = 'pass' | 'fail' | 'pass_partial' | 'error'
@@ -460,8 +488,48 @@ export class TrustProtocol {
 
   // ── Escrow (§10.4) ───────────────────────────────────────────────────────
 
-  async suggestCollateral(_counterpartyPubkey: string, _amountCents: number): Promise<CollateralSuggestion> {
-    return { suggestedRatio: 0.5, confidence: 'low', dataPoints: 0 }
+  async suggestCollateral(counterpartyPubkey: string, _amountCents: number): Promise<CollateralSuggestion> {
+    // 1. Local observations
+    const localScore = this.observations.trustScore(counterpartyPubkey)
+    const localCount = this.observations.getFor(counterpartyPubkey).length
+
+    // 2. Remote attestations
+    let remoteAttestations: Attestation[] = []
+    try {
+      remoteAttestations = await queryAttestations(counterpartyPubkey, {
+        limit: 100,
+        apiUrl: this.baseUrl,
+      })
+    } catch {
+      // Network failure — use local data only
+    }
+
+    // 3. Compute remote score
+    const remoteSuccesses = remoteAttestations.filter((a) => a.outcome === 'success').length
+    const remoteTotal = remoteAttestations.length
+    const remoteScore = remoteTotal > 0 ? remoteSuccesses / remoteTotal : null
+
+    // 4. Blend scores (local weighted 2x — direct experience more trustworthy)
+    const dataPoints = localCount + remoteTotal
+    if (dataPoints === 0) {
+      return { suggestedRatio: 0.5, confidence: 'low', dataPoints: 0 }
+    }
+
+    const localWeight = localScore !== null ? 2 : 0
+    const remoteWeight = remoteScore !== null ? 1 : 0
+    const totalWeight = localWeight + remoteWeight
+    const blendedScore = totalWeight > 0
+      ? ((localScore ?? 0) * localWeight + (remoteScore ?? 0) * remoteWeight) / totalWeight
+      : 0.5
+
+    // 5. Score -> collateral ratio (inverse — high trust = low collateral)
+    const suggestedRatio = Math.max(0.1, Math.min(1.0, 1.0 - blendedScore * 0.8))
+
+    // 6. Confidence from data volume
+    const confidence: 'low' | 'medium' | 'high' =
+      dataPoints >= 20 ? 'high' : dataPoints >= 5 ? 'medium' : 'low'
+
+    return { suggestedRatio, confidence, dataPoints }
   }
 
   async proposeEscrow(params: {
@@ -472,6 +540,9 @@ export class TrustProtocol {
     policyId?: string
     verificationMethod?: VerificationMethod
     timeoutSeconds?: number
+    fundingMode?: FundingMode
+    buyerAddress?: string
+    sellerAddress?: string
   }): Promise<Escrow> {
     return this.post('/escrow/propose', {
       seller: params.seller,
@@ -481,6 +552,9 @@ export class TrustProtocol {
       policyId: params.policyId,
       verificationMethod: params.verificationMethod ?? 'buyer_confirm',
       timeoutSeconds: params.timeoutSeconds ?? 3600,
+      fundingMode: params.fundingMode,
+      buyerAddress: params.buyerAddress,
+      sellerAddress: params.sellerAddress,
     })
   }
 
@@ -492,8 +566,9 @@ export class TrustProtocol {
     return this.post(`/escrow/${escrowId}/accept`, {})
   }
 
-  async fundEscrow(_escrowId: string): Promise<Escrow> {
-    throw new Error('Not implemented — in Stripe mode, use acceptEscrow() which handles funding atomically')
+  /** Notify API that on-chain funding has been submitted. On-chain escrows only. */
+  async fundEscrow(escrowId: string): Promise<Escrow> {
+    return this.post(`/escrow/${escrowId}/fund`, {})
   }
 
   async deliver(escrowId: string, deliverable: Record<string, unknown>): Promise<VerificationResult> {

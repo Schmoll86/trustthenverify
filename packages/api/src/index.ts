@@ -7,7 +7,7 @@ import { escrow } from './routes/escrow'
 import { verify } from './routes/verify'
 import { attestations } from './routes/attestations'
 import { disputes } from './routes/disputes'
-import { handleEscrowTimeout } from './cron/escrow-timeout'
+import { handleEscrowTimeout, handleOnchainFunding } from './cron/escrow-timeout'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 
 type AppEnv = {
@@ -40,6 +40,7 @@ export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, env: Env) {
     await handleEscrowTimeout(env)
+    await handleOnchainFunding(env)
   },
   async queue(batch: MessageBatch<ArgusQueueMessage>, env: Env) {
     for (const msg of batch.messages) {
