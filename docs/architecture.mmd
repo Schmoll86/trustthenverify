@@ -1,0 +1,23 @@
+```mermaid
+graph TD
+    A[Client SDK] --> |submit challenges| B(Cloudflare API)
+    B --> |store events| C[Supabase DB]
+    B --> |cache scores| D[Cloudflare KV]
+    B --> |process payments| E[Stripe/Alby NWC]
+    B --> |verify identity| F[Nostr NIP-98]
+    G[Operator Model] --> |spawn agents| B
+    H[Trust Scoring Engine] --> |calculate| I[Score Dimensions]
+    I --> J[Identity]
+    I --> K[Economic]
+    I --> L[Social]
+    I --> M[Behavioral]
+    N[Blockchain Anchoring] --> |daily roots| C
+    O[R2 Storage] --> |archive data| C
+
+    classDef component fill:#f9f9f9,stroke:#333;
+    classDef storage fill:#e0ffe0,stroke:#228B22;
+    classDef crypto fill:#fff0f5,stroke:#FF69B4;
+
+    class C,D,O storage
+    class E,F,N crypto
+```
