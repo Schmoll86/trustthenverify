@@ -23,3 +23,5 @@ binding = "AI"
 [vars]
 API_VERSION = "v2"
 BASE_RPC_URL = "https://mainnet.base.org"
+TRANSLATOR_MODEL = "moonshotai/kimi-k2.5"
+CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"
