@@ -1,6 +1,6 @@
 /**
  * In-memory mock SupabaseClient for testing.
- * Supports basic from().select/insert/eq/single/or/contains/order/limit chains.
+ * Supports basic from().select/insert/update/eq/in/single/or/contains/order/limit chains.
  */
 
 interface Row {
@@ -36,11 +36,14 @@ export function createMockDb() {
     let filteredRows = [...table.rows]
     let selectFields: string | null = null
     let insertData: Row | null = null
+    let updateData: Row | null = null
     let isSingle = false
     let orderField: string | null = null
     let orderAsc = true
     let limitCount: number | null = null
     let doSelect = false
+    // Track eq filters for update
+    const eqFilters: Array<{ field: string; value: unknown }> = []
 
     const chain = {
       select(fields: string = '*') {
@@ -60,8 +63,27 @@ export function createMockDb() {
         filteredRows = [insertData]
         return chain
       },
+      update(data: Row) {
+        updateData = data
+        return chain
+      },
       eq(field: string, value: unknown) {
+        eqFilters.push({ field, value })
         filteredRows = filteredRows.filter((r) => r[field] === value)
+        return chain
+      },
+      in(field: string, values: unknown[]) {
+        filteredRows = filteredRows.filter((r) => values.includes(r[field]))
+        return chain
+      },
+      lt(field: string, value: unknown) {
+        filteredRows = filteredRows.filter((r) => {
+          const rVal = r[field]
+          if (typeof rVal === 'string' && typeof value === 'string') {
+            return rVal < value
+          }
+          return (rVal as number) < (value as number)
+        })
         return chain
       },
       contains(field: string, jsonStr: string) {
@@ -112,6 +134,20 @@ export function createMockDb() {
         return chain.then()
       },
       then(resolve?: (value: { data: Row | Row[] | null; error: null }) => void) {
+        // Apply update if pending
+        if (updateData) {
+          for (const row of table.rows) {
+            const matches = eqFilters.every((f) => row[f.field] === f.value)
+            if (matches) {
+              Object.assign(row, updateData)
+            }
+          }
+          // Re-filter to return updated rows
+          filteredRows = table.rows.filter((row) =>
+            eqFilters.every((f) => row[f.field] === f.value)
+          )
+        }
+
         if (orderField) {
           filteredRows.sort((a, b) => {
             const aVal = String(a[orderField!] ?? '')

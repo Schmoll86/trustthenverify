@@ -5,6 +5,7 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string
   GATEWAY_PRIVATE_KEY: string
   SANDBOX_KEYS: string // comma-separated valid sandbox keys
+  STRIPE_SECRET_KEY: string
   AI: unknown
 }
 

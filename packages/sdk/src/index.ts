@@ -19,6 +19,10 @@ export {
   buildCanonicalString,
 } from './crypto.js'
 
+import { ObservationStore } from './observations.js'
+export { ObservationStore } from './observations.js'
+export type { Observation } from './observations.js'
+
 const DEFAULT_API_URL = 'https://api.trustthenverify.com/v2'
 const SANDBOX_API_URL = 'https://sandbox.trustthenverify.com/v2'
 
@@ -342,6 +346,7 @@ export class TrustProtocol {
   private baseUrl: string
   private sandbox: boolean
   private sandboxKey: string | undefined
+  readonly observations: ObservationStore
 
   constructor(options: TrustProtocolOptions) {
     this.publicKey = options.publicKey
@@ -350,6 +355,7 @@ export class TrustProtocol {
     this.sandboxKey = options.sandboxKey
     this.baseUrl = options.apiUrl
       ?? (this.sandbox ? SANDBOX_API_URL : DEFAULT_API_URL)
+    this.observations = new ObservationStore()
   }
 
   private async signedHeaders(method: string, path: string, body: string): Promise<Record<string, string>> {
@@ -495,7 +501,14 @@ export class TrustProtocol {
   }
 
   async confirmDelivery(escrowId: string): Promise<Escrow> {
-    return this.post(`/escrow/${escrowId}/confirm`, {})
+    const result = await this.post<Escrow>(`/escrow/${escrowId}/confirm`, {})
+    // Auto-record success observation for seller
+    this.observations.record(result.sellerId, {
+      outcome: 'success',
+      escrowId,
+      verificationMethod: result.verificationMethod,
+    })
+    return result
   }
 
   async getVerification(escrowId: string): Promise<VerificationResult> {
@@ -505,7 +518,15 @@ export class TrustProtocol {
   // ── Disputes (§3.4) ──────────────────────────────────────────────────────
 
   async disputeEscrow(escrowId: string, reason: string): Promise<Escrow> {
-    return this.post(`/escrow/${escrowId}/dispute`, { reason })
+    const result = await this.post<Escrow>(`/escrow/${escrowId}/dispute`, { reason })
+    // Auto-record failure observation for counterparty
+    // If we're the buyer, record against seller; if seller, against buyer
+    const counterparty = result.buyerId === this.publicKey ? result.sellerId : result.buyerId
+    this.observations.record(counterparty, {
+      outcome: 'failure',
+      escrowId,
+    })
+    return result
   }
 
   async fileForArbitration(params: {
@@ -539,13 +560,12 @@ export class TrustProtocol {
 
   // ── Observations (local — §7) ────────────────────────────────────────────
 
-  recordObservation(_counterpartyPubkey: string, _observation: {
+  recordObservation(counterpartyPubkey: string, observation: {
     outcome: 'success' | 'failure' | 'timeout'
     escrowId?: string
     verificationMethod?: string
     latencyMs?: number
   }): void {
-    // Local-only. SDK stores in memory/local storage.
-    // TODO: implement local observation store
+    this.observations.record(counterpartyPubkey, observation)
   }
 }

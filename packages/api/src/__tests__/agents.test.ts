@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import app from '../index'
+import { app } from '../index'
 import { generateKeypair, signRequest } from '@trustthenverify/sdk'
 import { createMockDb, type MockDb } from './helpers/mock-db'
 

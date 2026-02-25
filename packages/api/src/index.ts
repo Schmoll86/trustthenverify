@@ -7,6 +7,7 @@ import { escrow } from './routes/escrow'
 import { verify } from './routes/verify'
 import { attestations } from './routes/attestations'
 import { disputes } from './routes/disputes'
+import { handleEscrowTimeout } from './cron/escrow-timeout'
 
 type AppEnv = {
   Bindings: Env
@@ -34,4 +35,12 @@ app.route('/v2/verify', verify)
 app.route('/v2/attestations', attestations)
 app.route('/v2/disputes', disputes)
 
-export default app
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledEvent, env: Env) {
+    await handleEscrowTimeout(env)
+  },
+}
+
+// Also export the app directly for test usage (app.request())
+export { app }
