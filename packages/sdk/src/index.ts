@@ -1,116 +1,34 @@
+// BillyV2 SDK — @billyv2/sdk
+// Replaces @trustthenverify/sdk
+//
+// Zero-config reads require no account.
+// Writes require an agentId + secret (from registration).
+
 const DEFAULT_API_URL = 'https://api.trustthenverify.com/v1'
 
-// ── Zero-config reads (no account needed) ─────────────────────────────────────
-
-export async function isTrusted(agentId: string, apiUrl = DEFAULT_API_URL): Promise<boolean> {
-  const res = await fetch(`${apiUrl}/trust/${agentId}`)
-  const data = await res.json() as { data: { score: number } }
-  return data.data.score >= 20
-}
-
-export async function lookup(agentId: string, apiUrl = DEFAULT_API_URL): Promise<TrustScore> {
-  const res = await fetch(`${apiUrl}/trust/${agentId}`)
-  const data = await res.json() as { data: TrustScore }
-  return data.data
-}
-
-// ── Agent client (requires credentials) ──────────────────────────────────────
-
-export class TrustClient {
-  private apiUrl: string
-  private agentId?: string
-  private secret?: string
-
-  constructor(opts: { agentId?: string; secret?: string; apiUrl?: string } = {}) {
-    this.apiUrl = opts.apiUrl ?? DEFAULT_API_URL
-    this.agentId = opts.agentId
-    this.secret = opts.secret
-  }
-
-  /** Register a new agent. Returns credentials — store privateKey securely, never sent again. */
-  async register(name: string, contact: string, opts: RegisterOptions = {}): Promise<AgentCredentials> {
-    const res = await fetch(`${this.apiUrl}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, contact, ...opts })
-    })
-    const data = await res.json() as { data: AgentCredentials }
-    this.agentId = data.data.agentId
-    this.secret = data.data.secret
-    return data.data
-  }
-
-  /** Run all autonomous trust challenges. Zero human steps. Reaches Orange tier (~43pts) in ~5 min. */
-  async runTrustChallenges(opts: ChallengeOptions = {}): Promise<ChallengeResults> {
-    // TODO: implement challenge orchestration (Section 4.9)
-    throw new Error('Not implemented yet')
-  }
-
-  /** Check whether an agent is safe to transact with at a given amount. */
-  async checkBeforeTransaction(counterpartyId: string, amountCents: number): Promise<TransactionCheck> {
-    const score = await lookup(counterpartyId, this.apiUrl)
-    const required = amountCents < 100 ? 20
-      : amountCents < 1000 ? 40
-      : amountCents < 10000 ? 60
-      : 75
-    return {
-      proceed: score.total >= required,
-      score: score.total,
-      tier: score.tier,
-      requiredScore: required
-    }
-  }
-
-  /** Submit a verified review. Receipt is required — no receipt, no review. */
-  async review(agentId: string, rating: 1|2|3|4|5, comment: string, opts: ReviewOptions): Promise<void> {
-    // TODO: implement (Section 7)
-    throw new Error('Not implemented yet')
-  }
-
-  /** Request a trust-scored Lightning invoice for paying another agent (Section 5.3). */
-  async paymentRequest(payeeAgentId: string, amountSats: number, contextId: string): Promise<PaymentRequest> {
-    // TODO: implement NWC invoice creation
-    throw new Error('Not implemented yet')
-  }
-
-  /** Poll Lightning payment settlement status. */
-  async paymentStatus(paymentId: string): Promise<PaymentStatus> {
-    // TODO: implement
-    throw new Error('Not implemented yet')
-  }
-
-  private authHeaders(): Record<string, string> {
-    if (!this.secret) throw new Error('TrustClient: no secret set — call register() first or pass credentials to constructor')
-    return { 'X-Agent-Secret': this.secret }
-  }
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface TrustScore {
   agentId: string
   total: number
-  tier: 'Unverified' | 'New / Limited' | 'Moderate' | 'Trusted' | 'Highly Trusted'
-  dimensions: { identity: number; economic: number; social: number; behavioral: number }
+  tier: 'unverified' | 'limited' | 'moderate' | 'trusted' | 'highly_trusted'
+  dimensions: {
+    identity: number
+    economic: number
+    social: number
+    behavioral: number
+  }
+  bootstrapped: boolean   // true if score includes operator_inherited points
   lastUpdated: string
 }
 
 export interface AgentCredentials {
   agentId: string
   secret: string
-  publicKey?: string
-  privateKey?: string   // returned once only — store securely
-}
-
-export interface RegisterOptions {
-  generateKeypair?: boolean
-  endpoint?: string
-  capabilities?: string[]
-}
-
-export interface ChallengeOptions {
-  categories?: ('crypto' | 'behavioral' | 'adversarial' | 'transaction')[]
-  concurrency?: number
+  publicKey: string | null
+  privateKey: string | null   // returned once at registration — store immediately
+  initialScore: number
+  nextSteps: Array<{ action: string; description: string; points: number }>
 }
 
 export interface ChallengeResults {
@@ -118,28 +36,161 @@ export interface ChallengeResults {
   failed: number
   pointsEarned: number
   newScore: number
-  failedDetails: { challengeType: string; reason: string }[]
+  results: Array<{
+    challengeType: string
+    passed: boolean
+    pointsAwarded: number
+    registrySig: string
+  }>
 }
 
-export interface TransactionCheck {
-  proceed: boolean
-  score: number
-  tier: string
-  requiredScore: number
+// ─── Zero-config reads ────────────────────────────────────────────────────────
+
+export async function isTrusted(
+  agentId: string,
+  options?: { apiUrl?: string }
+): Promise<boolean> {
+  const score = await lookup(agentId, options)
+  return score.total >= 20
 }
 
-export interface ReviewOptions {
-  receipt: { type: 'stripe' | 'lightning' | 'eth' | 'solana'; id: string }
+export async function lookup(
+  agentId: string,
+  options?: { apiUrl?: string }
+): Promise<TrustScore> {
+  const baseUrl = options?.apiUrl ?? DEFAULT_API_URL
+  const res = await fetch(`${baseUrl}/trust/${agentId}`)
+  if (!res.ok) throw new Error(`Agent not found: ${agentId}`)
+  const json = await res.json() as { success: boolean; data: TrustScore }
+  return json.data
 }
 
-export interface PaymentRequest {
-  bolt11: string
-  paymentId: string
-  expiresAt: string
+// ─── TrustClient (authenticated) ─────────────────────────────────────────────
+
+export interface TrustClientOptions {
+  agentId: string
+  secret: string
+  privateKey?: string      // required for Level 2+ signed requests
+  apiUrl?: string
 }
 
-export interface PaymentStatus {
-  settled: boolean
-  preimageVerified: boolean
-  transactionId?: string
+export class TrustClient {
+  private agentId: string
+  private secret: string
+  private privateKey?: string
+  private baseUrl: string
+
+  constructor(options: TrustClientOptions) {
+    this.agentId = options.agentId
+    this.secret = options.secret
+    this.privateKey = options.privateKey
+    this.baseUrl = options.apiUrl ?? DEFAULT_API_URL
+  }
+
+  private authHeaders(): Record<string, string> {
+    // TODO: if privateKey present, use X-Agent-Signature (Level 2+)
+    // For now: X-Agent-Secret (Level 0-1)
+    return { 'X-Agent-Secret': this.secret, 'Content-Type': 'application/json' }
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: this.authHeaders(),
+      body: JSON.stringify(body),
+    })
+    const json = await res.json() as { success: boolean; data: T; error?: string }
+    if (!json.success) throw new Error(json.error ?? 'Request failed')
+    return json.data
+  }
+
+  /** Pre-transaction safety check. Throws if agent score is insufficient for amount. */
+  async checkBeforeTransaction(counterpartyId: string, amountCents: number): Promise<TrustScore> {
+    const score = await lookup(counterpartyId, { apiUrl: this.baseUrl })
+    const required =
+      amountCents < 100 ? 20 :
+      amountCents < 1000 ? 40 :
+      amountCents < 10000 ? 60 : 75
+
+    if (score.total < required) {
+      throw new Error(
+        `Agent ${counterpartyId} has score ${score.total} (${score.tier}). ` +
+        `Transaction of $${(amountCents / 100).toFixed(2)} requires score ≥ ${required}.`
+      )
+    }
+    return score
+  }
+
+  /** Run all autonomous trust challenges. Returns Orange tier in ~5 minutes with zero human steps. */
+  async runTrustChallenges(options?: {
+    categories?: ('crypto' | 'behavioral' | 'adversarial' | 'transaction')[]
+    concurrency?: number
+  }): Promise<ChallengeResults> {
+    // 1. Request challenge set from registry
+    const { challengeSetId, challenges } = await this.post<{ challengeSetId: string; challenges: unknown[] }>(
+      '/challenge/batch',
+      { agentId: this.agentId, categories: options?.categories }
+    )
+    // TODO: solve challenges (sign nonces, call own endpoint for behavioral, evaluate adversarial)
+    // 2. Submit results
+    return this.post<ChallengeResults>('/challenge/submit', {
+      agentId: this.agentId,
+      challengeSetId,
+      results: [],   // TODO: populated after solving
+    })
+  }
+
+  /** Submit a verified review. Receipt is required — no receipt, no review. */
+  async review(
+    agentId: string,
+    rating: 1 | 2 | 3 | 4 | 5,
+    comment: string,
+    receipt: { type: 'stripe' | 'lightning' | 'eth' | 'solana'; id: string }
+  ): Promise<{ reviewId: string; pointsAwarded: number }> {
+    return this.post('/reviews', { agentId, rating, comment, receipt })
+  }
+
+  /** Request a trust-scored Lightning invoice for paying another agent. */
+  async paymentRequest(
+    payeeAgentId: string,
+    amountSats: number,
+    contextId?: string
+  ): Promise<{ paymentId: string; bolt11: string; expiresAt: string }> {
+    return this.post('/payment/request', { payeeAgentId, amountSats, contextId })
+  }
+
+  /** Check Lightning payment settlement status. */
+  async paymentStatus(paymentId: string): Promise<{
+    settled: boolean
+    preimageVerified: boolean
+    transactionId: string | null
+  }> {
+    const res = await fetch(`${this.baseUrl}/payment/${paymentId}`, { headers: this.authHeaders() })
+    const json = await res.json() as { success: boolean; data: unknown }
+    return json.data as { settled: boolean; preimageVerified: boolean; transactionId: string | null }
+  }
+}
+
+// ─── Static registration (no existing client required) ───────────────────────
+
+export async function register(
+  name: string,
+  contact: string,
+  options?: {
+    generateKeypair?: boolean
+    endpoint?: string
+    operatorId?: string
+    operatorSecret?: string
+    apiUrl?: string
+  }
+): Promise<AgentCredentials> {
+  const baseUrl = options?.apiUrl ?? DEFAULT_API_URL
+  const res = await fetch(`${baseUrl}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, contact, ...options }),
+  })
+  const json = await res.json() as { success: boolean; data: AgentCredentials }
+  if (!json.success) throw new Error('Registration failed')
+  return json.data
 }

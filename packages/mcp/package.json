@@ -1,18 +1,19 @@
 {
-  "name": "@trustthenverify/mcp",
-  "version": "0.1.0",
-  "private": true,
-  "main": "src/index.ts",
+  "name": "@billyv2/mcp",
+  "version": "0.0.1",
+  "description": "MCP server for TrustThenVerify — gives AI agents native trust tools",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@trustthenverify/sdk": "*"
+    "@anthropic-ai/sdk": "^0.27.0",
+    "@billyv2/sdk": "*"
   },
   "devDependencies": {
-    "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
   }
 }
