@@ -33,6 +33,12 @@ export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
   const rawBody = await c.req.text()
   c.set('rawBody', rawBody)
 
+  // Detect sandbox mode from hostname (sandbox.trustthenverify.com)
+  const hostname = new URL(c.req.url).hostname
+  if (hostname.startsWith('sandbox.')) {
+    c.set('sandboxMode', true)
+  }
+
   // Sandbox auth: X-Sandbox-Key header bypasses ECDSA
   const sandboxKey = c.req.header('X-Sandbox-Key')
   if (sandboxKey) {
