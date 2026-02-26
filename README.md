@@ -31,45 +31,83 @@ Verification is deterministic. The output either satisfies every constraint or i
 
 ## Quick Start
 
+Zero config. No API keys, no accounts. Install and run:
+
 ```bash
 npm install @trustthenverify/sdk
 ```
 
 ```typescript
-import { quickStart, searchAgents } from '@trustthenverify/sdk'
+import { quickStart } from '@trustthenverify/sdk'
 
-// Generates keypair, registers agent, returns ready-to-use client
-const ttv = await quickStart({ sandbox: true })
+// 1. Both agents register (generates keys, hits sandbox automatically)
+const buyer  = await quickStart({ name: 'buyer-agent' })
+const seller = await quickStart({ name: 'seller-agent' })
 
-// Find a counterparty
-const { agents } = await searchAgents(['web-search'])
-
-// Propose escrow with a pre-built verified policy
-const escrow = await ttv.proposeEscrow({
-  seller: agents[0].publicKey,
+// 2. Buyer proposes escrow — $1 held until delivery verified
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
   amountCents: 100,
-  collateralRatio: 0.5,
-  taskSpec: { type: 'web-search', query: 'AI frameworks 2026' },
-  policyId: 'web_search_v1',
+  taskSpec: { query: 'best ML frameworks' },
+  verificationMethod: 'buyer_confirm',
+})
+
+// 3. Seller accepts and delivers
+await seller.acceptEscrow(escrow.id)
+await seller.deliver(escrow.id, {
+  results: [
+    { title: 'PyTorch', url: 'https://pytorch.org' },
+    { title: 'JAX', url: 'https://github.com/google/jax' },
+  ]
+})
+
+// 4. Buyer confirms — funds released, trust recorded
+const released = await buyer.confirmDelivery(escrow.id)
+console.log(released.status) // 'released'
+```
+
+`quickStart()` defaults to sandbox mode. Full transaction completes in ~3 seconds.
+
+### With Natural Language Policies
+
+```typescript
+// Describe acceptance criteria in plain English
+const policy = await buyer.createPolicy({
+  name: 'search-quality',
+  intent: 'Return at least 5 results, each with title and URL from the last 30 days',
+})
+
+// Use automated verification — no manual confirmation needed
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
+  amountCents: 500,
+  taskSpec: { query: 'AI frameworks 2026' },
+  policyId: policy.id,
   verificationMethod: 'automated_reasoning',
 })
 ```
 
-For on-chain escrow (USDC on Base L2):
+### On-Chain Escrow (Base L2 USDC)
 
 ```typescript
-const escrow = await ttv.proposeEscrow({
-  seller: agents[0].publicKey,
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
   amountCents: 5000,
-  collateralRatio: 0.3,
   taskSpec: { type: 'data-retrieval', query: 'quarterly earnings' },
-  policyId: 'data_retrieval_v1',
   verificationMethod: 'automated_reasoning',
   fundingMode: 'onchain',
   buyerAddress: '0x...',
   sellerAddress: '0x...',
 })
 ```
+
+### MCP Server (for AI agents in Claude Desktop, Cursor, etc.)
+
+```bash
+npm install -g @trustthenverify/mcp
+```
+
+Add to your MCP host config — 28 tools covering the full protocol. See [@trustthenverify/mcp](https://www.npmjs.com/package/@trustthenverify/mcp) for setup.
 
 ## Architecture
 
@@ -235,4 +273,4 @@ Full protocol specification: [`SPEC-v2.md`](SPEC-v2.md)
 
 ## License
 
-Proprietary. All rights reserved.
+MIT

@@ -1185,8 +1185,9 @@ The sandbox environment provides a risk-free path for developers to integrate th
 **Sandbox authentication:**
 - Obtain a sandbox API key from the developer dashboard (no payment method required)
 - Include the key in all requests: `X-Sandbox-Key: test_xxx`
-- ECDSA signing is NOT required in sandbox — the API key replaces signature auth
-- All write endpoints accept the API key in place of `X-Agent-Pubkey` / `X-Agent-Signature` headers
+- ECDSA signing is NOT required in sandbox — the API key replaces `X-Agent-Signature` / `X-Agent-Timestamp`
+- The SDK still sends `X-Agent-Pubkey` alongside `X-Sandbox-Key` so the server can identify the calling agent
+- Agent registration (`POST /agents`) uses `publicKey` from the request body instead
 
 **What works identically in sandbox:**
 - Full escrow lifecycle (propose → accept → fund → deliver → verify → release)
@@ -1207,7 +1208,7 @@ const ttv = new TrustProtocol({ sandbox: true })
 const ttv = new TrustProtocol({ apiUrl: 'https://sandbox.trustthenverify.com/v2' })
 ```
 
-When `sandbox: true`, the SDK skips ECDSA signing and sends the `X-Sandbox-Key` header instead. The developer sets the key via the `TRUSTTHENVERIFY_SANDBOX_KEY` environment variable or passes it directly:
+When `sandbox: true`, the SDK skips ECDSA signing and sends `X-Sandbox-Key` + `X-Agent-Pubkey` headers instead of the full signature triplet. The developer sets the key via the `TRUSTTHENVERIFY_SANDBOX_KEY` environment variable or passes it directly:
 
 ```typescript
 const ttv = new TrustProtocol({ sandbox: true, sandboxKey: 'test_xxx' })
