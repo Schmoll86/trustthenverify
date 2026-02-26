@@ -70,22 +70,22 @@ describe('Payment channel routes', () => {
 
   it('POST /v2/channels — registers a channel', async () => {
     const res = await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'ab'.repeat(20),
+      channelAddress: '0x' + 'ab'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 1000,
+      depositAmount: 1000,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     expect(res.status).toBe(201)
     const json = await res.json() as { data: Record<string, unknown> }
-    expect(json.data.contractAddress).toBe('0x' + 'ab'.repeat(20))
+    expect(json.data.channelAddress).toBe('0x' + 'ab'.repeat(20))
     expect(json.data.status).toBe('open')
   })
 
   it('POST /v2/channels — missing fields returns 400', async () => {
     const res = await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'ab'.repeat(20),
+      channelAddress: '0x' + 'ab'.repeat(20),
     }, buyer)
 
     expect(res.status).toBe(400)
@@ -94,30 +94,29 @@ describe('Payment channel routes', () => {
   it('POST /v2/channels — unknown counterparty returns 404', async () => {
     const unknown = generateKeypair()
     const res = await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'cd'.repeat(20),
+      channelAddress: '0x' + 'cd'.repeat(20),
       counterparty: unknown.publicKey,
-      depositUsdc: 500,
+      depositAmount: 500,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     expect(res.status).toBe(404)
   })
 
   it('GET /v2/channels/:address — returns channel', async () => {
-    // First create
     await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'ef'.repeat(20),
+      channelAddress: '0x' + 'ef'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 500,
+      depositAmount: 500,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     const res = await authedRequest('GET', '/v2/channels/0x' + 'ef'.repeat(20), null, buyer)
     expect(res.status).toBe(200)
     const json = await res.json() as { data: Record<string, unknown> }
-    expect(json.data.depositUsdc).toBe(500)
+    expect(json.data.depositAmount).toBe(500)
   })
 
   it('GET /v2/channels/:address — non-party gets 403', async () => {
@@ -129,11 +128,11 @@ describe('Payment channel routes', () => {
     ])
 
     await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'aa'.repeat(20),
+      channelAddress: '0x' + 'aa'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 500,
+      depositAmount: 500,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     const res = await authedRequest('GET', '/v2/channels/0x' + 'aa'.repeat(20), null, thirdParty)
@@ -142,27 +141,26 @@ describe('Payment channel routes', () => {
 
   it('POST /v2/channels/:address/close — closes channel', async () => {
     await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'bb'.repeat(20),
+      channelAddress: '0x' + 'bb'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 500,
+      depositAmount: 500,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     const res = await authedRequest('POST', '/v2/channels/0x' + 'bb'.repeat(20) + '/close', {}, buyer)
     expect(res.status).toBe(200)
     const json = await res.json() as { data: Record<string, unknown> }
     expect(json.data.status).toBe('closed')
-    expect(json.data.closedAt).toBeTruthy()
   })
 
   it('POST /v2/channels/:address/close — double close returns 409', async () => {
     await authedRequest('POST', '/v2/channels', {
-      contractAddress: '0x' + 'cc'.repeat(20),
+      channelAddress: '0x' + 'cc'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 500,
+      depositAmount: 500,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     }, buyer)
 
     await authedRequest('POST', '/v2/channels/0x' + 'cc'.repeat(20) + '/close', {}, buyer)

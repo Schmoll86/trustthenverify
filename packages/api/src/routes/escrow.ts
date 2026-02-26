@@ -239,17 +239,24 @@ escrow.post('/:id/accept', async (c) => {
   const fundingMode = (escrowRow as unknown as Record<string, unknown>).funding_mode as string ?? 'stripe'
 
   if (fundingMode === 'onchain') {
-    // On-chain mode: proposed → accepted, deploy contract
-    const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+    let contractAddress = 'sandbox_mock_contract'
+    let txHash = 'sandbox_mock_tx'
 
-    const { contractAddress, txHash } = await onchain.deployEscrow({
-      escrowId: escrowRow.id,
-      buyer: (escrowRow as unknown as Record<string, unknown>).buyer_address as string,
-      seller: (escrowRow as unknown as Record<string, unknown>).seller_address as string,
-      amountUsdc: BigInt(escrowRow.amount_cents) * 10000n, // cents → 6 decimal USDC
-      collateralUsdc: BigInt(escrowRow.seller_collateral) * 10000n,
-      deadlineTimestamp: Math.floor(Date.now() / 1000) + (escrowRow.timeout_seconds ?? 3600),
-    })
+    if (!c.get('sandboxMode')) {
+      // On-chain mode: proposed → accepted, deploy contract
+      const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
+
+      const deployed = await onchain.deployEscrow({
+        escrowId: escrowRow.id,
+        buyer: (escrowRow as unknown as Record<string, unknown>).buyer_address as string,
+        seller: (escrowRow as unknown as Record<string, unknown>).seller_address as string,
+        amountUsdc: BigInt(escrowRow.amount_cents) * 10000n, // cents → 6 decimal USDC
+        collateralUsdc: BigInt(escrowRow.seller_collateral) * 10000n,
+        deadlineTimestamp: Math.floor(Date.now() / 1000) + (escrowRow.timeout_seconds ?? 3600),
+      })
+      contractAddress = deployed.contractAddress
+      txHash = deployed.txHash
+    }
 
     // Funding window: 30 min for agents to fund the contract
     const fundingWindowMs = 30 * 60 * 1000

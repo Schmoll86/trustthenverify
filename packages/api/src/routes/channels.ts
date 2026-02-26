@@ -43,11 +43,13 @@ channels.post('/', async (c) => {
 
   const rawBody = c.get('rawBody')
   let body: {
-    contractAddress?: string
+    channelAddress?: string
     counterparty?: string
-    depositUsdc?: number
+    depositAmount?: number
     chainId?: number
-    expiration?: string
+    expiryAt?: string
+    buyerAddress?: string
+    sellerAddress?: string
   }
   try {
     body = JSON.parse(rawBody || '{}')
@@ -55,13 +57,13 @@ channels.post('/', async (c) => {
     return error(c, 400, 'INVALID_JSON', 'Invalid JSON body')
   }
 
-  const { contractAddress, counterparty, depositUsdc, chainId, expiration } = body
+  const { channelAddress, counterparty, depositAmount, chainId, expiryAt, buyerAddress, sellerAddress } = body
 
-  if (!contractAddress) return error(c, 400, 'MISSING_FIELD', 'contractAddress is required')
+  if (!channelAddress) return error(c, 400, 'MISSING_FIELD', 'channelAddress is required')
   if (!counterparty) return error(c, 400, 'MISSING_FIELD', 'counterparty is required')
-  if (depositUsdc == null || depositUsdc <= 0) return error(c, 400, 'INVALID_FIELD', 'depositUsdc must be positive')
+  if (depositAmount == null || depositAmount <= 0) return error(c, 400, 'INVALID_FIELD', 'depositAmount must be positive')
   if (!chainId) return error(c, 400, 'MISSING_FIELD', 'chainId is required')
-  if (!expiration) return error(c, 400, 'MISSING_FIELD', 'expiration is required')
+  if (!expiryAt) return error(c, 400, 'MISSING_FIELD', 'expiryAt is required')
 
   const db = createDb(c.env)
 
@@ -80,12 +82,15 @@ channels.post('/', async (c) => {
   const { data: channel, error: dbError } = await db
     .from('payment_channels')
     .insert({
-      contract_address: contractAddress,
+      channel_address: channelAddress,
       buyer_id: agentId,
       seller_id: counterpartyAgent.id,
-      deposit_usdc: depositUsdc,
+      buyer_address: buyerAddress || '',
+      seller_address: sellerAddress || '',
+      deposit_amount: depositAmount,
+      spent_amount: 0,
       chain_id: chainId,
-      expiration,
+      expiry_at: expiryAt,
       status: 'open',
     })
     .select()
@@ -114,7 +119,7 @@ channels.get('/:address', async (c) => {
   const { data: channel } = await db
     .from('payment_channels')
     .select('*')
-    .eq('contract_address', address)
+    .eq('channel_address', address)
     .single()
 
   if (!channel) {
@@ -142,7 +147,7 @@ channels.post('/:address/close', async (c) => {
   const { data: channel } = await db
     .from('payment_channels')
     .select('*')
-    .eq('contract_address', address)
+    .eq('channel_address', address)
     .single()
 
   if (!channel) {
@@ -159,7 +164,7 @@ channels.post('/:address/close', async (c) => {
 
   const { data: updated, error: dbError } = await db
     .from('payment_channels')
-    .update({ status: 'closed', closed_at: new Date().toISOString() })
+    .update({ status: 'closed' })
     .eq('id', channel.id)
     .select()
     .single()

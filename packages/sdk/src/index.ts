@@ -783,21 +783,23 @@ export class TrustProtocol {
   // ── Payment Channels (§8) ──────────────────────────────────────────────
 
   async registerChannel(params: {
-    contractAddress: string
+    channelAddress: string
     counterparty: string
-    depositUsdc: number
+    depositAmount: number
     chainId: number
-    expiration: string
+    expiryAt: string
+    buyerAddress?: string
+    sellerAddress?: string
   }): Promise<PaymentChannel> {
     return this.post('/channels', params)
   }
 
-  async getChannel(contractAddress: string): Promise<PaymentChannel> {
-    return this.get(`/channels/${contractAddress}`)
+  async getChannel(channelAddress: string): Promise<PaymentChannel> {
+    return this.get(`/channels/${channelAddress}`)
   }
 
-  async closeChannel(contractAddress: string): Promise<PaymentChannel> {
-    return this.post(`/channels/${contractAddress}/close`, {})
+  async closeChannel(channelAddress: string): Promise<PaymentChannel> {
+    return this.post(`/channels/${channelAddress}/close`, {})
   }
 
   // ── Observations (local — §7) ────────────────────────────────────────────

@@ -185,20 +185,20 @@ describe('E2E payment channels', { timeout: 60_000 }, () => {
 
   it('registers a payment channel', async () => {
     const channel = await buyerProto.registerChannel({
-      contractAddress: '0x' + 'ab'.repeat(20),
+      channelAddress: '0x' + 'ab'.repeat(20),
       counterparty: seller.publicKey,
-      depositUsdc: 1000,
+      depositAmount: 1000,
       chainId: 84532,
-      expiration: '2026-12-31T23:59:59Z',
+      expiryAt: '2026-12-31T23:59:59Z',
     })
 
-    expect(channel.contractAddress).toBe('0x' + 'ab'.repeat(20))
+    expect(channel.channelAddress).toBe('0x' + 'ab'.repeat(20))
     expect(channel.status).toBe('open')
   })
 
   it('reads channel details', async () => {
     const channel = await buyerProto.getChannel('0x' + 'ab'.repeat(20))
-    expect(channel.depositUsdc).toBe(1000)
+    expect(channel.depositAmount).toBe(1000)
   })
 
   it('seller can also read channel', async () => {
@@ -209,7 +209,6 @@ describe('E2E payment channels', { timeout: 60_000 }, () => {
   it('closes channel', async () => {
     const channel = await buyerProto.closeChannel('0x' + 'ab'.repeat(20))
     expect(channel.status).toBe('closed')
-    expect(channel.closedAt).toBeTruthy()
   })
 
   it('double close returns error', async () => {

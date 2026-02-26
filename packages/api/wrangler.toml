@@ -39,8 +39,8 @@ id = "29c97513f8c640b889a52ce0111f5d84"
 [vars]
 API_VERSION = "v2"
 ARBITRATION_MODEL = "google/gemini-2.5-flash"
-BASE_RPC_URL = "https://mainnet.base.org"
-BASE_CHAIN_ID = "8453"
+BASE_RPC_URL = "https://sepolia.base.org"
+BASE_CHAIN_ID = "84532"
 TRANSLATOR_MODEL = "google/gemini-2.5-flash"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
 
