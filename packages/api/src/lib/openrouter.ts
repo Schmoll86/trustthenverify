@@ -25,21 +25,32 @@ export class RealLLMService implements LLMService {
     maxTokens?: number
     temperature?: number
   }): Promise<string> {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://trustthenverify.com',
-        'X-Title': 'TrustThenVerify',
-      },
-      body: JSON.stringify({
-        model: params.model,
-        messages: params.messages,
-        max_tokens: params.maxTokens ?? 4096,
-        temperature: params.temperature ?? 0.2,
-      }),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25_000) // 25s timeout (Workers wall-clock limit is 30s)
+
+    let response: Response
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://trustthenverify.com',
+          'X-Title': 'TrustThenVerify',
+        },
+        body: JSON.stringify({
+          model: params.model,
+          messages: params.messages,
+          max_tokens: params.maxTokens ?? 4096,
+          temperature: params.temperature ?? 0.2,
+        }),
+        signal: controller.signal,
+      })
+    } catch (err) {
+      clearTimeout(timeoutId)
+      throw new Error(`OpenRouter request failed: ${err instanceof Error ? err.message : 'timeout'}`)
+    }
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const text = await response.text().catch(() => '')

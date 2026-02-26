@@ -35,8 +35,8 @@ binding = "AI"
 API_VERSION = "v2"
 BASE_RPC_URL = "https://mainnet.base.org"
 BASE_CHAIN_ID = "8453"
-TRANSLATOR_MODEL = "moonshotai/kimi-k2.5"
-CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"
+TRANSLATOR_MODEL = "google/gemini-2.5-flash"
+CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
 
 # Secrets (set via `wrangler secret put`):
 # ESCROW_FACTORY_ADDRESS — deployed EscrowFactory contract address
@@ -53,5 +53,5 @@ routes = [
 API_VERSION = "v2"
 BASE_RPC_URL = "https://sepolia.base.org"
 BASE_CHAIN_ID = "84532"
-TRANSLATOR_MODEL = "moonshotai/kimi-k2.5"
-CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"
+TRANSLATOR_MODEL = "google/gemini-2.5-flash"
+CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
