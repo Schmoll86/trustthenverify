@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import type { Env } from './lib/db'
+import { loggingMiddleware, errorHandler } from './middleware/logging'
 import { authMiddleware } from './middleware/auth'
+import { rateLimitMiddleware } from './middleware/rate-limit'
 import { agents } from './routes/agents'
 import { policies } from './routes/policies'
 import { escrow } from './routes/escrow'
@@ -19,10 +21,17 @@ type AppEnv = {
     agentId?: string
     sandboxMode?: boolean
     rawBody?: string
+    requestId?: string
   }
 }
 
 const app = new Hono<AppEnv>()
+
+// ── Error boundary ───────────────────────────────────────────────────────────
+app.onError(errorHandler)
+
+// ── Logging (outermost middleware) ───────────────────────────────────────────
+app.use('*', loggingMiddleware)
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/', (c) => c.json({ name: 'TrustThenVerify API', version: '2.0.0', spec: 'SPEC-v2' }))
@@ -30,6 +39,9 @@ app.get('/v2/health', (c) => c.json({ status: 'ok', version: '2.0.0' }))
 
 // ── Auth middleware (applies to all /v2 routes) ──────────────────────────────
 app.use('/v2/*', authMiddleware)
+
+// ── Rate limiting (after auth, needs agentId) ────────────────────────────────
+app.use('/v2/*', rateLimitMiddleware)
 
 // ── Route groups (§9.3) ──────────────────────────────────────────────────────
 app.route('/v2/agents', agents)

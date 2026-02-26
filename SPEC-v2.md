@@ -80,7 +80,7 @@ Both parties deposit into a protocol-controlled escrow before work begins. Relea
 | `seller_deposit` | Collateral seller locks | 50% of task price |
 | `timeout` | Max time from activation to delivery. `expires_at` is computed as `now() + timeout` at the moment the escrow transitions to `active`. | 1 hour |
 | `verification_method` | How delivery is verified (see §3) | `buyer_confirm` |
-| `dispute_resolution` | What happens on dispute | `burn` |
+| `dispute_resolution` | What happens on dispute: `arbitrate` (LLM judge, 10% fee) or `burn` (nuclear, both lose) | `arbitrate` |
 | `policy_id` | Reference to formal acceptance policy (if using AR verification) | null |
 
 **Escrow lifecycle:**
@@ -102,12 +102,14 @@ PROPOSE → ACCEPT → FUND → ACTIVE → DELIVER → VERIFY → RELEASE
 | `funded` | `active` | Immediate (same request) | Both deposits confirmed | `expires_at` = `now() + timeout_seconds`; timer starts |
 | `active` | `delivered` | Seller calls `/deliver` | Deliverable present | Gateway runs verification |
 | `active` | `expired` | `expires_at` reached | No delivery submitted | Buyer refunded, seller loses collateral |
-| `active` | `disputed` | Either party calls `/dispute` | — | Both deposits frozen |
+| `active` | `burned` | Either party calls `/dispute` (burn mode) | `dispute_resolution = 'burn'` | Both deposits burned |
+| `active` | `disputed` | Either party calls `/dispute` (arbitrate mode) | `dispute_resolution = 'arbitrate'` | Both deposits frozen, LLM judges |
 | `delivered` | `released` | Verification passes | Gateway signs pass result | Buyer deposit → seller. Seller collateral → seller. |
 | `delivered` | `failed` | Verification fails | Gateway signs fail result | Buyer deposit → buyer. Seller collateral burned. |
-| `delivered` | `disputed` | Buyer calls `/dispute` | Only for `buyer_confirm` method | Both deposits frozen |
-| `disputed` | `burned` | Default resolution | `dispute_resolution = 'burn'` | Both deposits burned (sent to protocol treasury) |
-| `disputed` | `resolved` | Arbitrator ruling | `dispute_resolution = 'arbitrate'` | Funds distributed per ruling |
+| `delivered` | `burned` | Either party calls `/dispute` (burn mode) | `dispute_resolution = 'burn'` | Both deposits burned |
+| `delivered` | `disputed` | Either party calls `/dispute` (arbitrate mode) | `dispute_resolution = 'arbitrate'` | Both deposits frozen, LLM judges |
+| `disputed` | `failed` | LLM rules `buyer_wins` | One round, no appeal | Buyer refunded minus 10% fee, collateral kept |
+| `disputed` | `released` | LLM rules `seller_wins` | One round, no appeal | Seller paid minus 10% fee, collateral returned |
 
 **Accept and fund are two logical steps, one or two API calls:**
 - **Stripe mode (Phase 1):** `POST /escrow/:id/accept` performs both — seller signs acceptance AND both parties' Stripe charges are captured atomically. The escrow transitions `proposed → accepted → funded → active` in a single request. The response returns status `active`.
@@ -123,13 +125,14 @@ PROPOSE → ACCEPT → FUND → ACTIVE → DELIVER → VERIFY → RELEASE
 
 **Fund distribution summary:**
 
-| Exit Path | Buyer Gets | Seller Gets | Burned |
+| Exit Path | Buyer Gets | Seller Gets | Platform Gets |
 |---|---|---|---|
 | **Released** (verification pass) | Nothing | Payment + collateral back | Nothing |
 | **Failed** (verification fail) | Full deposit back | Nothing | Seller collateral |
 | **Expired** (no delivery) | Full deposit back | Nothing | Seller collateral |
-| **Burned** (dispute, default) | Nothing | Nothing | Both deposits |
-| **Arbitrated** (dispute, ruling) | Per ruling | Per ruling | Arbitrator fee from escrow |
+| **Arbitrated — buyer wins** (default dispute) | Payment minus 10% fee | Nothing | 10% fee + seller collateral |
+| **Arbitrated — seller wins** (default dispute) | Nothing | Payment minus 10% fee | 10% fee |
+| **Burned** (opt-in dispute) | Nothing | Nothing | Both deposits |
 
 **Collateral ratio is the trust signal.** A new agent willing to stake 2× collateral is immediately trustworthy for THIS transaction regardless of history. Money at risk > historical narrative.
 
@@ -489,11 +492,20 @@ Final policy stored with coverage estimate.
 
 Despite formal verification and adversarial refinement, some disputes will occur: policy gaps Argus Codex missed, novel exploit patterns, ambiguous intent that no formal policy can fully capture.
 
-**Tier 1: Burn (default).** Both deposits destroyed. Neither party benefits from disputing. Game-theoretically sound: buyers only dispute when work is truly unacceptable, sellers only deliver garbage if losing collateral is acceptable. Deadweight loss is the price of decentralization.
+**Disputes are the exception, not the standard path.** The protocol's entire design (formal policies, automated verification, Argus Codex refinement, oracle consensus) exists to prevent disputes from ever happening. When they do occur, there is exactly one round of resolution — no appeals, no escalation. This is by design: disputes are expensive, and the protocol incentivizes agents to avoid them by building good policies and delivering quality work.
 
-**Tier 2: Arbitration (opt-in for high-value escrows).** Curated arbitrator registry. Arbitrator reviews deliverable against acceptance criteria, issues binding ruling. Arbitrator fee paid from escrow. This IS a centralized trust component — the spec acknowledges this honestly. Scoped narrowly to high-value disputes where burn is too costly.
+**Mode 1: Arbitrate (default).** A third-party LLM reviews the evidence — task spec, policy, verification results, deliverable, and dispute reason — and issues a single binding ruling: `buyer_wins` or `seller_wins`. The losing party pays a 10% arbitration fee to the platform. One round only, no appeal.
 
-**Tier 3: Staged execution (for irreversible actions).** Decompose irreversible tasks into verifiable stages. "Deploy to production" becomes "deploy to staging" (verified) → "run tests" (verified) → "promote to production" (buyer executes). Each stage has its own escrow and formal policy.
+| Ruling | Buyer gets | Seller gets | Platform gets |
+|---|---|---|---|
+| `buyer_wins` | Payment minus 10% fee | Nothing | 10% fee + seller collateral |
+| `seller_wins` | Nothing | Payment minus 10% fee | 10% fee |
+
+The arbitrating LLM is a different model from any model that may have generated or verified the deliverable. This is not a human arbitrator — it is automated, fast, and deterministic for a given evidence set. The 10% fee makes frivolous disputes economically irrational.
+
+**Mode 2: Burn (opt-in).** Both deposits destroyed. Neither party benefits from disputing. Game-theoretically sound: buyers only dispute when work is truly unacceptable, sellers only deliver garbage if losing collateral is acceptable. Deadweight loss is the price of decentralization. Set `dispute_resolution: 'burn'` in escrow proposal to opt in.
+
+**Staged execution (for irreversible actions).** Decompose irreversible tasks into verifiable stages. "Deploy to production" becomes "deploy to staging" (verified) → "run tests" (verified) → "promote to production" (buyer executes). Each stage has its own escrow and formal policy.
 
 ### 3.5 Oracle Consensus Verification
 
@@ -870,7 +882,7 @@ escrows (
   task_spec           JSONB NOT NULL,
   policy_id           UUID REFERENCES policies(id), -- formal acceptance policy
   verification_method TEXT DEFAULT 'buyer_confirm',
-  dispute_resolution  TEXT DEFAULT 'burn',
+  dispute_resolution  TEXT DEFAULT 'arbitrate',
   status              TEXT DEFAULT 'proposed',
   proof               TEXT,                         -- zkML proof hash (future)
   created_at          TIMESTAMPTZ DEFAULT now(),

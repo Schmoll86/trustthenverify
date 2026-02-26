@@ -11,6 +11,9 @@ import type { GatewayService } from '../lib/gateway'
 import { RealGatewayService } from '../lib/gateway'
 import type { OnchainService } from '../lib/onchain'
 import { RealOnchainService } from '../lib/onchain'
+import type { ArbitrationService } from '../lib/arbitration-service'
+import { RealArbitrationService } from '../lib/arbitration-service'
+import { RealLLMService } from '../lib/openrouter'
 import type { Escrow } from '@trustthenverify/sdk'
 import type { EscrowRow, AgentRow } from '../lib/types'
 
@@ -24,6 +27,7 @@ type AppEnv = {
     stripe?: StripeService
     gateway?: GatewayService
     onchain?: OnchainService
+    arbitration?: ArbitrationService
   }
 }
 
@@ -57,6 +61,16 @@ function getOnchain(c: { env: Env; get(key: 'onchain'): OnchainService | undefin
     c.env.GATEWAY_EOA_PRIVATE_KEY ?? '',
     parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10),
   )
+}
+
+/** Get or create ArbitrationService. Tests inject via c.set('arbitration', mock). */
+function getArbitration(c: { env: Env; get(key: 'arbitration'): ArbitrationService | undefined }): ArbitrationService | null {
+  const injected = c.get('arbitration')
+  if (injected) return injected
+  if (!c.env.OPENROUTER_API_KEY) return null
+  const model = c.env.ARBITRATION_MODEL ?? 'google/gemini-2.5-flash'
+  const llm = new RealLLMService(c.env.OPENROUTER_API_KEY)
+  return new RealArbitrationService(llm, model)
 }
 
 // ── GET /escrow/:id — fetch escrow status (public, no auth) ──────────────────
@@ -164,7 +178,7 @@ escrow.post('/propose', async (c) => {
       task_spec: body.taskSpec,
       policy_id: body.policyId ?? null,
       verification_method: body.verificationMethod ?? 'buyer_confirm',
-      dispute_resolution: body.disputeResolution ?? 'burn',
+      dispute_resolution: body.disputeResolution ?? 'arbitrate',
       status: 'proposed',
       timeout_seconds: timeoutSeconds,
       expires_at: expiresAt,
@@ -743,47 +757,45 @@ escrow.post('/:id/dispute', async (c) => {
     return error(c, 403, 'FORBIDDEN', 'Only buyer or seller can dispute')
   }
 
-  // Must be active or delivered
-  if (!canTransition(escrowRow.status as 'active' | 'delivered', 'dispute')) {
+  const disputeMode = escrowRow.dispute_resolution ?? 'arbitrate'
+
+  // Check valid transition based on mode
+  const action = disputeMode === 'burn' ? 'dispute' : 'dispute_arbitrate'
+  if (!canTransition(escrowRow.status as 'active' | 'delivered', action)) {
     return error(c, 409, 'INVALID_STATE', `Cannot dispute in status: ${escrowRow.status}`)
   }
 
   const now = new Date().toISOString()
 
   // Burn mode: immediate burn
-  if (escrowRow.dispute_resolution === 'burn') {
-    if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
-      // On-chain dispute happens directly on contract — just update DB state
-      // Agents call dispute() on the contract themselves
-    } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
-      const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
-      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-      await stripe.burnFunds({
-        stripeBuyerPiId: buyerPiId,
-        stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
-      })
+  if (disputeMode === 'burn') {
+    if (!c.get('sandboxMode')) {
+      if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+        // On-chain dispute happens directly on contract — just update DB state
+      } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+        const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
+        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+        await stripe.burnFunds({
+          stripeBuyerPiId: buyerPiId,
+          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+        })
+      }
     }
 
     const { data: updated } = await db
       .from('escrows')
-      .update({
-        status: 'burned',
-        completed_at: now,
-      })
+      .update({ status: 'burned', completed_at: now })
       .eq('id', escrowId)
       .select()
       .single()
 
-    // Insert dispute record
-    await db
-      .from('disputes')
-      .insert({
-        escrow_id: escrowId,
-        initiator_id: callerId,
-        reason: body.reason ?? null,
-        status: 'resolved',
-        resolved_at: now,
-      })
+    await db.from('disputes').insert({
+      escrow_id: escrowId,
+      initiator_id: callerId,
+      reason: body.reason ?? null,
+      status: 'resolved',
+      resolved_at: now,
+    })
 
     if (!updated) {
       return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
@@ -792,6 +804,157 @@ escrow.post('/:id/dispute', async (c) => {
     return success(c, snakeToCamel<Escrow>(updated))
   }
 
-  // Arbitrate mode (future) — just record the dispute
-  return error(c, 501, 'NOT_IMPLEMENTED', 'Arbitration mode not yet supported')
+  // ── Arbitrate mode: LLM judges, loser pays 10% fee ──────────────────────
+
+  // 1. Set escrow to disputed
+  const { data: disputed } = await db
+    .from('escrows')
+    .update({ status: 'disputed' })
+    .eq('id', escrowId)
+    .select()
+    .single()
+
+  if (!disputed) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
+  }
+
+  // 2. Insert dispute record
+  const { data: disputeRecord } = await db
+    .from('disputes')
+    .insert({
+      escrow_id: escrowId,
+      initiator_id: callerId,
+      reason: body.reason ?? null,
+      status: 'pending',
+    })
+    .select()
+    .single()
+
+  // 3. Gather evidence
+  const initiatorRole = escrowRow.buyer_id === callerId ? 'buyer' : 'seller'
+
+  // Get policy if exists
+  let policy: { intent: string; formalSpec?: Record<string, unknown> } | null = null
+  if (escrowRow.policy_id) {
+    const { data: policyRow } = await db
+      .from('policies')
+      .select('intent, formal_spec')
+      .eq('id', escrowRow.policy_id)
+      .single()
+    if (policyRow) {
+      policy = { intent: policyRow.intent, formalSpec: policyRow.formal_spec }
+    }
+  }
+
+  // Get verification results
+  const { data: verifications } = await db
+    .from('verifications')
+    .select('method, result, failure_details')
+    .eq('escrow_id', escrowId)
+
+  const verificationResults = verifications?.map((v: Record<string, unknown>) => ({
+    method: v.method as string,
+    result: v.result as string,
+    failures: (v.failure_details as Record<string, unknown>)?.failures as unknown[] | undefined,
+  })) ?? null
+
+  // 4. Call LLM arbitrator
+  const arbitrationSvc = getArbitration(c as unknown as { env: Env; get(key: 'arbitration'): ArbitrationService | undefined })
+  if (!arbitrationSvc) {
+    // No OpenRouter key — leave dispute pending for manual resolution
+    return success(c, snakeToCamel<Escrow>(disputed))
+  }
+
+  let ruling: { ruling: 'buyer_wins' | 'seller_wins'; rationale: string; confidence: number }
+  try {
+    ruling = await arbitrationSvc.arbitrate({
+      escrowId,
+      taskSpec: escrowRow.task_spec,
+      policy,
+      verificationResults,
+      disputeReason: body.reason ?? 'No reason provided',
+      initiatorRole: initiatorRole as 'buyer' | 'seller',
+      amountCents: escrowRow.amount_cents,
+      deliverable: escrowRow.proof ? null : null, // proof hash only, no deliverable stored
+    })
+  } catch (err) {
+    // LLM failed — leave dispute open for retry
+    return error(c, 502, 'ARBITRATION_FAILED', err instanceof Error ? err.message : 'Arbitration failed')
+  }
+
+  // 5. Calculate 10% fee
+  const feeCents = Math.round(escrowRow.amount_cents * 0.10)
+  const netCents = escrowRow.amount_cents - feeCents
+
+  // 6. Execute ruling
+  if (ruling.ruling === 'buyer_wins') {
+    // Refund buyer (minus 10% fee), keep seller collateral
+    if (!c.get('sandboxMode')) {
+      if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+        const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
+        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+        await stripe.refundBuyerAndBurnCollateral({
+          stripeBuyerPiId: buyerPiId,
+          buyerRefundCents: netCents,
+          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+        })
+      }
+    }
+
+    const { data: finalEscrow } = await db
+      .from('escrows')
+      .update({ status: 'failed', completed_at: now })
+      .eq('id', escrowId)
+      .select()
+      .single()
+
+    // Update dispute record
+    await db.from('disputes').update({
+      ruling: 'buyer_wins',
+      status: 'resolved',
+      resolved_at: now,
+      evidence_hash: JSON.stringify({ rationale: ruling.rationale, confidence: ruling.confidence, fee: feeCents }),
+    }).eq('id', disputeRecord?.id ?? '')
+
+    return success(c, snakeToCamel<Escrow>(finalEscrow ?? disputed))
+  }
+
+  // seller_wins: transfer to seller (minus 10% fee), return collateral
+  if (!c.get('sandboxMode')) {
+    if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+      const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
+      const { data: sellerAgent } = await db
+        .from('agents')
+        .select('*')
+        .eq('id', escrowRow.seller_id)
+        .single()
+      const sellerRow = sellerAgent as AgentRow | null
+      if (sellerRow?.stripe_connected_account_id) {
+        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+        const { transferId } = await stripe.releaseFunds({
+          stripeBuyerPiId: buyerPiId,
+          sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+          sellerAmountCents: netCents,
+          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+        })
+        await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+      }
+    }
+  }
+
+  const { data: finalEscrow } = await db
+    .from('escrows')
+    .update({ status: 'released', completed_at: now })
+    .eq('id', escrowId)
+    .select()
+    .single()
+
+  await db.from('disputes').update({
+    ruling: 'seller_wins',
+    status: 'resolved',
+    resolved_at: now,
+    evidence_hash: JSON.stringify({ rationale: ruling.rationale, confidence: ruling.confidence, fee: feeCents }),
+  }).eq('id', disputeRecord?.id ?? '')
+
+  return success(c, snakeToCamel<Escrow>(finalEscrow ?? disputed))
 })

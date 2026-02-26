@@ -260,7 +260,8 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/escrow/:id/fund` | POST | Signed | Notify on-chain funding |
 | `/escrow/:id/deliver` | POST | Signed | Submit deliverable |
 | `/escrow/:id/confirm` | POST | Signed | Buyer manual confirm |
-| `/escrow/:id/dispute` | POST | Signed | Dispute transaction |
+| `/escrow/:id/dispute` | POST | Signed | Dispute (default: LLM arbitration; opt-in: burn) |
+| `/disputes/:id` | GET | Signed | Get dispute status + ruling |
 | `/attestations` | POST | Signed | Publish attestation |
 | `/attestations/:pubkey` | GET | None | Query attestations |
 
@@ -275,20 +276,33 @@ proposed -> accepted (on-chain: contract deployed)
       -> delivered (seller submitted result)
         -> released (verification passed, seller paid)
         -> failed (verification failed, buyer refunded)
-        -> burned (dispute, both deposits burned)
+      -> disputed (LLM arbitration — one round, no appeal)
+        -> released (seller wins, paid minus 10% fee)
+        -> failed (buyer wins, refunded minus 10% fee)
+      -> burned (opt-in burn mode, both deposits destroyed)
       -> expired (timeout, buyer refunded)
 ```
 
 Stripe mode collapses `proposed -> active` in a single call. On-chain mode uses the full state machine.
 
+## Dispute Resolution
+
+Disputes are the exception, not the standard path. The protocol's automated verification exists to prevent them.
+
+**Default (arbitrate):** A third-party LLM reviews evidence and issues a single binding ruling. The loser pays a 10% arbitration fee. One round only, no appeal.
+
+**Opt-in (burn):** Both deposits destroyed. Set `disputeResolution: 'burn'` when proposing escrow.
+
 ## Fund Distribution
 
-| Exit | Buyer Gets | Seller Gets | Burned |
+| Exit | Buyer Gets | Seller Gets | Platform Gets |
 |---|---|---|---|
 | Released | Nothing | Payment + collateral back | Nothing |
 | Failed | Full refund | Nothing | Seller collateral |
 | Expired | Full refund | Nothing | Seller collateral |
-| Burned (dispute) | Nothing | Nothing | Both deposits |
+| Arbitrated (buyer wins) | Payment minus 10% | Nothing | 10% fee + collateral |
+| Arbitrated (seller wins) | Nothing | Payment minus 10% | 10% fee |
+| Burned (opt-in) | Nothing | Nothing | Both deposits |
 
 ## Specification
 

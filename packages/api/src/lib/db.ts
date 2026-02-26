@@ -24,6 +24,10 @@ export interface Env {
   // Phase 6: Oracle verification
   ORACLE_FEE_CENTS?: string           // default: '100' ($1.00)
   ORACLE_VOTING_WINDOW_SECONDS?: string // default: '1800' (30 min)
+  // Rate limiting
+  RATE_LIMIT_KV?: KVNamespace
+  // Arbitration
+  ARBITRATION_MODEL?: string           // default: 'google/gemini-2.5-flash'
 }
 
 /** Create a Supabase client per-request from Workers env bindings. */

@@ -9,9 +9,13 @@ describe('Escrow state machine', () => {
       ['proposed', 'timeout'],
       ['active', 'deliver'],
       ['active', 'dispute'],
+      ['active', 'dispute_arbitrate'],
       ['active', 'timeout'],
       ['delivered', 'confirm'],
       ['delivered', 'dispute'],
+      ['delivered', 'dispute_arbitrate'],
+      ['disputed', 'ruling_buyer'],
+      ['disputed', 'ruling_seller'],
     ]
 
     for (const [from, action] of valid) {
@@ -55,6 +59,18 @@ describe('Escrow state machine', () => {
     it('active + dispute → burned', () => {
       expect(nextStatus('active', 'dispute')).toBe('burned')
     })
+    it('active + dispute_arbitrate → disputed', () => {
+      expect(nextStatus('active', 'dispute_arbitrate')).toBe('disputed')
+    })
+    it('delivered + dispute_arbitrate → disputed', () => {
+      expect(nextStatus('delivered', 'dispute_arbitrate')).toBe('disputed')
+    })
+    it('disputed + ruling_buyer → failed', () => {
+      expect(nextStatus('disputed', 'ruling_buyer')).toBe('failed')
+    })
+    it('disputed + ruling_seller → released', () => {
+      expect(nextStatus('disputed', 'ruling_seller')).toBe('released')
+    })
     it('active + timeout → expired', () => {
       expect(nextStatus('active', 'timeout')).toBe('expired')
     })
@@ -76,5 +92,6 @@ describe('Escrow state machine', () => {
     it('proposed is not terminal', () => expect(isTerminal('proposed')).toBe(false))
     it('active is not terminal', () => expect(isTerminal('active')).toBe(false))
     it('delivered is not terminal', () => expect(isTerminal('delivered')).toBe(false))
+    it('disputed is not terminal', () => expect(isTerminal('disputed')).toBe(false))
   })
 })

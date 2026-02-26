@@ -193,10 +193,16 @@ export interface Dispute {
   reason: string | null
   evidenceHash: string | null
   arbitratorId: string | null
-  ruling: string | null
-  status: 'open' | 'resolved'
+  ruling: 'buyer_wins' | 'seller_wins' | null
+  status: 'pending' | 'resolved'
   createdAt: string
   resolvedAt: string | null
+  /** Parsed from evidenceHash when ruling is via LLM arbitration */
+  arbitrationDetails?: {
+    rationale: string
+    confidence: number
+    fee: number
+  }
 }
 
 // Phase 6: Oracle Consensus (§3.5)

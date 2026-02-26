@@ -2,10 +2,11 @@ import type { Context } from 'hono'
 
 /** Success response envelope per §9.4. */
 export function success(c: Context, data: unknown, status: number = 200) {
+  const requestId = c.get('requestId') as string | undefined ?? crypto.randomUUID()
   return c.json(
     {
       data,
-      meta: { requestId: crypto.randomUUID() },
+      meta: { requestId },
     },
     status as 200,
   )
@@ -18,10 +19,11 @@ export function error(
   code: string,
   message: string,
 ) {
+  const requestId = c.get('requestId') as string | undefined ?? crypto.randomUUID()
   return c.json(
     {
       error: { code, message },
-      meta: { requestId: crypto.randomUUID() },
+      meta: { requestId },
     },
     status as 400,
   )
