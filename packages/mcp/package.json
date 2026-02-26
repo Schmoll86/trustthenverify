@@ -1,19 +1,26 @@
 {
   "name": "@trustthenverify/mcp",
   "version": "0.1.0",
+  "type": "module",
   "description": "MCP server for TrustThenVerify — gives AI agents native escrow + verification tools (v2)",
   "main": "dist/index.js",
+  "bin": {
+    "trust-mcp": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@trustthenverify/sdk": "*"
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@trustthenverify/sdk": "*",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "tsx": "^4.16.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
   }
 }
