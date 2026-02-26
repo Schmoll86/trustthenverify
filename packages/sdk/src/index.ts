@@ -384,9 +384,23 @@ export async function createAgent(params: {
   if (isSandbox) {
     const key = params.sandboxKey
       ?? (typeof process !== 'undefined' ? process.env?.TRUSTTHENVERIFY_SANDBOX_KEY : undefined)
-    headers = {
-      'Content-Type': 'application/json',
-      'X-Sandbox-Key': key ?? '',
+    if (key) {
+      // Sandbox key auth — simplified, no ECDSA
+      headers = {
+        'Content-Type': 'application/json',
+        'X-Sandbox-Key': key,
+        'X-Agent-Pubkey': params.publicKey,
+      }
+    } else {
+      // No sandbox key — fall back to ECDSA signing against sandbox URL
+      const timestamp = Math.floor(Date.now() / 1000)
+      const signature = await signRequest(params.privateKey, 'POST', path, body, timestamp)
+      headers = {
+        'Content-Type': 'application/json',
+        'X-Agent-Pubkey': params.publicKey,
+        'X-Agent-Timestamp': String(timestamp),
+        'X-Agent-Signature': signature,
+      }
     }
   } else {
     const timestamp = Math.floor(Date.now() / 1000)
@@ -419,7 +433,7 @@ export interface TrustProtocolOptions {
 }
 
 export class TrustProtocol {
-  private publicKey: string
+  readonly publicKey: string
   private privateKey: string
   private baseUrl: string
   private sandbox: boolean
@@ -440,11 +454,15 @@ export class TrustProtocol {
     if (this.sandbox) {
       const key = this.sandboxKey
         ?? (typeof process !== 'undefined' ? process.env?.TRUSTTHENVERIFY_SANDBOX_KEY : undefined)
-      return {
-        'X-Sandbox-Key': key ?? '',
-        'X-Agent-Pubkey': this.publicKey,
-        'Content-Type': 'application/json',
+      if (key) {
+        // Sandbox key auth — simplified, no ECDSA
+        return {
+          'X-Sandbox-Key': key,
+          'X-Agent-Pubkey': this.publicKey,
+          'Content-Type': 'application/json',
+        }
       }
+      // No sandbox key — fall back to ECDSA signing against sandbox URL
     }
 
     const timestamp = Math.floor(Date.now() / 1000)

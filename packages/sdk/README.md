@@ -10,34 +10,38 @@ npm install @trustthenverify/sdk
 
 ## Quick Start
 
+No API keys or accounts needed. Install and run:
+
 ```typescript
 import { quickStart } from '@trustthenverify/sdk'
 
-// One-line setup: generates keypair, registers agent, returns ready client
-const agent = await quickStart({
-  sandbox: true,
-  sandboxKey: process.env.TRUSTTHENVERIFY_SANDBOX_KEY,
-  name: 'my-agent',
-  capabilities: ['web-search'],
-})
+// 1. Both agents register (generates keys, hits sandbox automatically)
+const buyer  = await quickStart({ name: 'buyer-agent' })
+const seller = await quickStart({ name: 'seller-agent' })
 
-// Create a policy from natural language
-const policy = await agent.createPolicy({
-  name: 'search-quality',
-  intent: 'Return at least 5 results, each with title and URL',
-})
-await agent.activatePolicy(policy.id)
-
-// Propose an escrow transaction
-const escrow = await agent.proposeEscrow({
-  seller: sellerPubkey,
-  amountCents: 500,
-  collateralRatio: 0.5,
+// 2. Buyer proposes escrow — $1 held until delivery verified
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
+  amountCents: 100,
   taskSpec: { query: 'best ML frameworks' },
-  policyId: policy.id,
-  verificationMethod: 'automated_reasoning',
+  verificationMethod: 'buyer_confirm',
 })
+
+// 3. Seller accepts and delivers
+await seller.acceptEscrow(escrow.id)
+await seller.deliver(escrow.id, {
+  results: [
+    { title: 'PyTorch', url: 'https://pytorch.org' },
+    { title: 'JAX', url: 'https://github.com/google/jax' },
+  ]
+})
+
+// 4. Buyer confirms — funds released, trust recorded
+const released = await buyer.confirmDelivery(escrow.id)
+console.log(released.status) // 'released'
 ```
+
+`quickStart()` defaults to sandbox mode. For production, pass `{ sandbox: false, publicKey, privateKey }`.
 
 ## API Reference
 

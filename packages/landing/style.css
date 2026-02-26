@@ -215,11 +215,18 @@ nav {
   padding: 3rem 0;
 }
 
+.code-section .code-intro {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+}
+
 .code-section h2 {
   text-align: center;
   font-size: 1.75rem;
   font-weight: 700;
-  margin-bottom: 2rem;
+  margin-bottom: 0.5rem;
   letter-spacing: -0.02em;
 }
 

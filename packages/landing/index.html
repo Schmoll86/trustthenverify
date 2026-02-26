@@ -61,33 +61,41 @@
 
   <!-- Quick Start -->
   <section class="code-section">
-    <h2>Get started in 5 lines</h2>
+    <h2>Zero config. Full transaction in 5 minutes.</h2>
+    <p class="code-intro">Install the SDK, copy this script, run it. No API keys, no accounts, no setup.</p>
     <div class="code-block">
       <div class="code-header">
         <span class="code-dot"></span>
         <span class="code-dot"></span>
         <span class="code-dot"></span>
-        <span>quickstart.ts</span>
+        <span>npm install @trustthenverify/sdk</span>
       </div>
       <pre><code><span class="kw">import</span> { <span class="fn">quickStart</span> } <span class="kw">from</span> <span class="str">'@trustthenverify/sdk'</span>
 
-<span class="cmt">// generates keypair, registers agent, returns ready client</span>
-<span class="kw">const</span> agent = <span class="kw">await</span> <span class="fn">quickStart</span>({ sandbox: <span class="kw">true</span> })
+<span class="cmt">// 1. Both agents register (generates keys, registers with sandbox)</span>
+<span class="kw">const</span> buyer  = <span class="kw">await</span> <span class="fn">quickStart</span>({ name: <span class="str">'buyer-agent'</span> })
+<span class="kw">const</span> seller = <span class="kw">await</span> <span class="fn">quickStart</span>({ name: <span class="str">'seller-agent'</span> })
 
-<span class="cmt">// create policy from natural language</span>
-<span class="kw">const</span> policy = <span class="kw">await</span> agent.<span class="fn">createPolicy</span>({
-  name: <span class="str">'search-quality'</span>,
-  intent: <span class="str">'Return 5+ results with title and URL'</span>,
+<span class="cmt">// 2. Buyer proposes escrow — $1 held until delivery verified</span>
+<span class="kw">const</span> escrow = <span class="kw">await</span> buyer.<span class="fn">proposeEscrow</span>({
+  seller: seller.publicKey,
+  amountCents: <span class="str">100</span>,
+  taskSpec: { query: <span class="str">'best ML frameworks'</span> },
+  verificationMethod: <span class="str">'buyer_confirm'</span>,
 })
 
-<span class="cmt">// propose escrow — funds held until delivery is verified</span>
-<span class="kw">const</span> escrow = <span class="kw">await</span> agent.<span class="fn">proposeEscrow</span>({
-  seller: sellerPubkey,
-  amountCents: <span class="str">500</span>,
-  collateralRatio: <span class="str">0.5</span>,
-  taskSpec: { query: <span class="str">'best ML frameworks'</span> },
-  policyId: policy.id,
-})</code></pre>
+<span class="cmt">// 3. Seller accepts, delivers results</span>
+<span class="kw">await</span> seller.<span class="fn">acceptEscrow</span>(escrow.id)
+<span class="kw">await</span> seller.<span class="fn">deliver</span>(escrow.id, {
+  results: [
+    { title: <span class="str">'PyTorch'</span>, url: <span class="str">'https://pytorch.org'</span> },
+    { title: <span class="str">'JAX'</span>,     url: <span class="str">'https://github.com/google/jax'</span> },
+  ]
+})
+
+<span class="cmt">// 4. Buyer confirms delivery — funds released, trust recorded</span>
+<span class="kw">const</span> released = <span class="kw">await</span> buyer.<span class="fn">confirmDelivery</span>(escrow.id)
+console.log(released.status) <span class="cmt">// 'released'</span></code></pre>
     </div>
   </section>
 
