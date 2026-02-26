@@ -35,6 +35,17 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Arbitration service: `packages/api/src/lib/arbitration-service.ts` (follows GatewayService pattern)
 - Prompts: `packages/api/src/lib/arbitration-prompts.ts`
 
+## On-Chain Escrow (Base L2)
+- **Key separation:** `GATEWAY_PRIVATE_KEY` signs verification results (ECDSA). `GATEWAY_EOA_PRIVATE_KEY` signs Ethereum transactions (EIP-1559). Can be the same key.
+- **Hashing:** All Ethereum hashing uses `keccak_256` from `@noble/hashes/sha3.js` — function selectors, message hashes, address derivation, tx signing.
+- **Noble secp256k1 v3 recovery:** `format: 'recovered'` returns `recovery(1) || r(32) || s(32)` — recovery byte is FIRST. Ethereum convention is `r || s || v` — must reformat after signing.
+- **EIP-1559 tx signing:** v = recovery (0 or 1), NOT +27. Legacy/personal sign: v = recovery + 27.
+- **RLP encoder:** `packages/api/src/lib/rlp.ts` — minimal Ethereum Yellow Paper implementation.
+- **On-chain service:** `packages/api/src/lib/onchain.ts` — derives sender address, builds EIP-1559 txns, signs via noble.
+- **Payment channels:** API routes at `/v2/channels`, SDK methods `registerChannel/getChannel/closeChannel`, signing helpers in `packages/sdk/src/channels.ts`.
+- **Contracts:** `packages/contracts/` (Foundry standalone). EscrowFactory (CREATE2), EscrowInstance (8 states), PaymentChannel (unidirectional USDC).
+- **Deployment:** Base Sepolia. Needs `ESCROW_FACTORY_ADDRESS`, `GATEWAY_EOA_PRIVATE_KEY` as wrangler secrets.
+
 ## Testing
 - `vitest` for both SDK and API.
 - SDK: unit tests for crypto functions.
@@ -42,6 +53,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - E2E: `packages/e2e/` — tests against live sandbox (not in workspaces, manual run).
 - Run unit tests: `npm test --workspaces -- --run`
 - Run E2E: `cd packages/e2e && E2E_API_URL=https://sandbox.trustthenverify.com/v2 E2E_SANDBOX_KEY=<key> npx vitest --run`
+- E2E on-chain: requires funded wallets (Base Sepolia ETH + USDC) and deployed contracts.
 
 ## Before Committing
 - `npm run build --workspace=packages/sdk` must succeed

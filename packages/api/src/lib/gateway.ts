@@ -163,7 +163,7 @@ export class RealGatewayService implements GatewayService {
     action: 'release' | 'fail'
   }): Promise<ChainSignature> {
     const { signAsync } = await import('@noble/secp256k1')
-    const { sha256 } = await import('@noble/hashes/sha2.js')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
     const { bytesToHex, hexToBytes } = await import('@noble/hashes/utils.js')
 
     // Match the Solidity message hash construction
@@ -179,21 +179,19 @@ export class RealGatewayService implements GatewayService {
       packed = new Uint8Array([...escrowIdBytes, ...resultBytes, ...addrBytes])
     }
 
-    // keccak256(abi.encodePacked(...)) — we use sha256 as keccak placeholder
-    // Real deployment uses keccak256; for consistency with contract
-    const messageHash = sha256(packed)
+    // keccak256(abi.encodePacked(...)) — matches Solidity contract
+    const messageHash = keccak_256(packed)
 
     // Ethereum signed message prefix
     const prefix = new TextEncoder().encode('\x19Ethereum Signed Message:\n32')
-    const ethSignedHash = sha256(new Uint8Array([...prefix, ...messageHash]))
+    const ethSignedHash = keccak_256(new Uint8Array([...prefix, ...messageHash]))
 
-    const sig = await signAsync(ethSignedHash, hexToBytes(this.gatewayPrivateKey), { prehash: false })
-    const sigBytes = sig as unknown as Uint8Array
-    const r = bytesToHex(sigBytes.slice(0, 32))
-    const s = bytesToHex(sigBytes.slice(32, 64))
-    // Recovery bit: noble v3 includes it as the 65th byte when using Signature.toCompactRawBytes()
-    // For our purposes, we default to v=27 (even parity) — real deployment derives from recovery
-    const v = sigBytes.length > 64 ? (sigBytes[64] ?? 0) + 27 : 27
+    // noble v3 'recovered' format: recovery(1) || r(32) || s(32)
+    const sigBytes = await signAsync(ethSignedHash, hexToBytes(this.gatewayPrivateKey), { prehash: false, format: 'recovered' }) as unknown as Uint8Array
+    const recovery = sigBytes[0]
+    const r = bytesToHex(sigBytes.slice(1, 33))
+    const s = bytesToHex(sigBytes.slice(33, 65))
+    const v = recovery + 27 // Ethereum ecrecover: v = recovery + 27
 
     return { v, r, s }
   }

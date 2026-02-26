@@ -28,30 +28,27 @@ export function encodeBool(value: boolean): string {
 
 /** Compute 4-byte function selector from signature like "fund()". */
 export async function functionSelector(signature: string): Promise<string> {
-  const { sha256 } = await import('@noble/hashes/sha2.js')
-  // Actually keccak256 for Ethereum, but we'll use a simpler approach
-  // Since we only need a few known selectors, we can precompute
+  const { keccak_256 } = await import('@noble/hashes/sha3.js')
   const encoded = new TextEncoder().encode(signature)
-  // Use keccak256 via a manual implementation or precomputed values
-  const hash = sha256(encoded) // NOTE: placeholder, real impl uses keccak
+  const hash = keccak_256(encoded)
   return Array.from(hash.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-// Precomputed keccak256 selectors for our contracts (avoids runtime keccak dependency)
+// Precomputed keccak256 selectors for our contracts
 export const SELECTORS = {
   // EscrowFactory
-  'create(bytes32,address,address,uint256,uint256,uint256)': '5b3e3f75',
-  'escrows(bytes32)': '8b2c8224',
-  'predictAddress(bytes32,address,address,uint256,uint256,uint256)': 'a7e4e170',
+  'create(bytes32,address,address,uint256,uint256,uint256)': '745eab86',
+  'escrows(bytes32)': '2d83549c',
+  'predictAddress(bytes32,address,address,uint256,uint256,uint256)': '044082e3',
   // EscrowInstance
   'state()': 'c19d93fb',
   'fund()': 'b60d4288',
-  'fundSeller()': 'a60e8bd4',
-  'submitDeliverable(bytes32)': '6d6b0698',
-  'confirmDelivery()': '7d3d1498',
-  'gatewayRelease(bytes32,bytes32,uint8,bytes32,bytes32)': '1a3d5f6c',
-  'gatewayFail(bytes32,bytes32,uint8,bytes32,bytes32)': '2b4d7e8a',
-  'dispute(bytes32)': '8e7ea5b2',
+  'fundSeller()': '02b90c88',
+  'submitDeliverable(bytes32)': 'b6ae44a5',
+  'confirmDelivery()': '5e10177b',
+  'gatewayRelease(bytes32,bytes32,uint8,bytes32,bytes32)': 'a8f6e9d3',
+  'gatewayFail(bytes32,bytes32,uint8,bytes32,bytes32)': 'f19f5bd1',
+  'dispute(bytes32)': 'add98c70',
   'timeout()': '70dea79a',
   'buyer()': '7150d8ae',
   'seller()': '08551a53',

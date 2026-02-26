@@ -23,7 +23,7 @@ import { ObservationStore } from './observations.js'
 export { ObservationStore } from './observations.js'
 export type { Observation } from './observations.js'
 
-export { signChannelPayment, verifyChannelPayment } from './channels.js'
+export { signChannelPayment, verifyChannelPayment, publicKeyToAddress, encodeChannelClose } from './channels.js'
 export type { ChannelPayment } from './channels.js'
 
 const DEFAULT_API_URL = 'https://api.trustthenverify.com/v2'
@@ -778,6 +778,26 @@ export class TrustProtocol {
 
   async getOracleTask(taskId: string): Promise<OracleTask> {
     return this.get(`/oracles/task/${taskId}`)
+  }
+
+  // ── Payment Channels (§8) ──────────────────────────────────────────────
+
+  async registerChannel(params: {
+    contractAddress: string
+    counterparty: string
+    depositUsdc: number
+    chainId: number
+    expiration: string
+  }): Promise<PaymentChannel> {
+    return this.post('/channels', params)
+  }
+
+  async getChannel(contractAddress: string): Promise<PaymentChannel> {
+    return this.get(`/channels/${contractAddress}`)
+  }
+
+  async closeChannel(contractAddress: string): Promise<PaymentChannel> {
+    return this.post(`/channels/${contractAddress}/close`, {})
   }
 
   // ── Observations (local — §7) ────────────────────────────────────────────

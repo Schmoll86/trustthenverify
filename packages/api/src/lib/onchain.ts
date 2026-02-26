@@ -65,11 +65,13 @@ export class RealOnchainService implements OnchainService {
   private rpcUrl: string
   private factoryAddress: string
   private privateKey: string
+  private chainId: number
 
-  constructor(rpcUrl: string, factoryAddress: string, privateKey: string, _chainId: number) {
+  constructor(rpcUrl: string, factoryAddress: string, privateKey: string, chainId: number) {
     this.rpcUrl = rpcUrl
     this.factoryAddress = factoryAddress
     this.privateKey = privateKey
+    this.chainId = chainId
   }
 
   private async rpcCall(method: string, params: unknown[]): Promise<unknown> {
@@ -206,30 +208,101 @@ export class RealOnchainService implements OnchainService {
     return evmStateToStatus(decodeUint256(result))
   }
 
+  /** Derive the sender address from the private key. */
+  private async getSenderAddress(): Promise<string> {
+    const { getPublicKey, Point } = await import('@noble/secp256k1')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
+    const { hexToBytes, bytesToHex } = await import('@noble/hashes/utils.js')
+
+    const compressed = getPublicKey(hexToBytes(this.privateKey))
+    const point = Point.fromHex(bytesToHex(compressed))
+    const uncompressed = point.toBytes(false)
+    const hash = keccak_256(uncompressed.slice(1))
+    return '0x' + bytesToHex(hash.slice(12))
+  }
+
+  /** Build, sign, and broadcast an EIP-1559 transaction. */
   private async sendTransaction(to: string, data: string): Promise<string> {
-    // Simplified tx sending: get nonce, estimate gas, sign, broadcast
     const { signAsync } = await import('@noble/secp256k1')
-    const { sha256 } = await import('@noble/hashes/sha2.js')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
     const { bytesToHex, hexToBytes } = await import('@noble/hashes/utils.js')
+    const { rlpEncode, bigintToRlpBytes, hexToRlpBytes } = await import('./rlp')
 
-    void signAsync; void sha256; void bytesToHex; void hexToBytes
+    const sender = await this.getSenderAddress()
 
-    // For the real implementation, this would:
-    // 1. eth_getTransactionCount for nonce
-    // 2. eth_estimateGas
-    // 3. Build RLP-encoded EIP-1559 transaction
-    // 4. Sign with secp256k1
-    // 5. eth_sendRawTransaction
-    // For now, return placeholder — real tx signing is complex and
-    // will be validated against testnet in deployment step
-    const nonce = await this.rpcCall('eth_getTransactionCount', [
-      '0x' + this.privateKey.slice(0, 40), // derive address in real impl
-      'latest',
+    // 1. Get nonce
+    const nonceHex = await this.rpcCall('eth_getTransactionCount', [sender, 'latest']) as string
+    const nonce = BigInt(nonceHex)
+
+    // 2. Estimate gas (with 1M fallback)
+    let gasLimit: bigint
+    try {
+      const gasHex = await this.rpcCall('eth_estimateGas', [{
+        from: sender,
+        to,
+        data,
+      }]) as string
+      // Add 20% buffer
+      gasLimit = BigInt(gasHex) * 120n / 100n
+    } catch {
+      gasLimit = 1_000_000n
+    }
+
+    // 3. Get base fee and compute EIP-1559 gas prices
+    const maxPriorityFeePerGas = 1_500_000_000n // 1.5 gwei
+    let maxFeePerGas: bigint
+    try {
+      const gasPriceHex = await this.rpcCall('eth_gasPrice', []) as string
+      const basePrice = BigInt(gasPriceHex)
+      maxFeePerGas = basePrice * 2n + maxPriorityFeePerGas
+    } catch {
+      maxFeePerGas = 10_000_000_000n // 10 gwei fallback
+    }
+
+    // 4. Build EIP-1559 tx fields
+    const chainId = BigInt(this.chainId)
+    const toBytes = hexToRlpBytes(to)
+    const dataBytes = hexToRlpBytes(data)
+
+    const txFields = [
+      bigintToRlpBytes(chainId),
+      bigintToRlpBytes(nonce),
+      bigintToRlpBytes(maxPriorityFeePerGas),
+      bigintToRlpBytes(maxFeePerGas),
+      bigintToRlpBytes(gasLimit),
+      toBytes,
+      bigintToRlpBytes(0n), // value = 0
+      dataBytes,
+      [], // accessList = empty
+    ]
+
+    // 5. Sign: keccak256(0x02 || rlpEncode(fields))
+    const unsignedRlp = rlpEncode(txFields)
+    const txForSigning = new Uint8Array([0x02, ...unsignedRlp])
+    const txHash = keccak_256(txForSigning)
+
+    // noble v3 'recovered' format: recovery(1) || r(32) || s(32)
+    const sigBytes = await signAsync(txHash, hexToBytes(this.privateKey), { prehash: false, format: 'recovered' }) as unknown as Uint8Array
+    const recovery = sigBytes[0] // EIP-1559 v is just 0 or 1, NOT +27
+    const r = sigBytes.slice(1, 33)
+    const s = sigBytes.slice(33, 65)
+
+    // 6. Build signed tx: 0x02 || rlpEncode([...fields, v, r, s])
+    const signedFields = [
+      ...txFields,
+      bigintToRlpBytes(BigInt(recovery)),
+      r,
+      s,
+    ]
+    const signedRlp = rlpEncode(signedFields)
+    const signedTx = new Uint8Array([0x02, ...signedRlp])
+
+    // 7. Broadcast
+    const result = await this.rpcCall('eth_sendRawTransaction', [
+      '0x' + bytesToHex(signedTx),
     ]) as string
 
-    void nonce; void to; void data
-
-    throw new Error('Real transaction signing requires full EIP-1559 RLP encoding — use deployment scripts for on-chain operations')
+    return result
   }
 }
 

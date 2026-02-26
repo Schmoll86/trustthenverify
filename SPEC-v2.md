@@ -1037,6 +1037,56 @@ EscrowFactory:
 
 **Gas costs:** ~$0.01 per transaction on Base L2. For micro-transactions (<$1), use payment channels (batch settlement) or Stripe escrow.
 
+#### 8.1.2 Deployment
+
+**Network:** Base Sepolia (testnet, chain ID 84532). Mainnet deployment on Base (chain ID 8453) when ready.
+
+**Deployed contracts (Base Sepolia):**
+- EscrowFactory: `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`
+- Gateway/Treasury: `0x2299244F6c99E59A1f8197509030428030aaaff9`
+
+**USDC addresses:**
+- Base Sepolia: `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle)
+- Base mainnet: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+
+**Key separation:**
+- `GATEWAY_PRIVATE_KEY` — secp256k1 key for signing verification results (ECDSA, used by the API verification engine)
+- `GATEWAY_EOA_PRIVATE_KEY` — secp256k1 key for Ethereum transaction signing (EIP-1559, used to call smart contract functions)
+
+These can be the same key or different. The contract's `authorizedGateway` address must match the EOA derived from `GATEWAY_EOA_PRIVATE_KEY`.
+
+**Transaction signing:** EIP-1559 (type 2) transactions with RLP encoding. The API derives the sender address from the private key via `keccak256(uncompressed_pubkey[1:])[-20:]`, fetches nonce, estimates gas (1M fallback), signs with secp256k1, and broadcasts via `eth_sendRawTransaction`.
+
+#### 8.1.3 Payment Channels
+
+For micro-transactions where per-transaction gas costs are prohibitive, agents can open unidirectional USDC payment channels:
+
+```
+PaymentChannel(buyer, seller, deposit, expiry):
+  - Buyer deploys and funds channel contract with USDC
+  - For each micro-payment: buyer signs (channelAddress, cumulativeAmount) off-chain
+  - Seller holds latest signed payment
+  - At any time: seller calls close(amount, signature) to claim funds
+  - After expiry: buyer can reclaim unclaimed funds
+```
+
+**Signature format:** keccak256(abi.encodePacked(channelAddress, amount)) with Ethereum signed message prefix. 65-byte signature: r(32) || s(32) || v(1) where v = recovery + 27.
+
+**API routes:**
+```
+POST   /channels                     — register a channel (buyer provides contract address)
+GET    /channels/:address            — read channel details (buyer or seller only)
+POST   /channels/:address/close      — record closure event
+```
+
+**SDK helpers:**
+- `signChannelPayment(privateKey, channelAddress, amount)` — sign off-chain payment
+- `verifyChannelPayment(payment, signerPublicKey)` — verify payment signature
+- `encodeChannelClose(amount, signature)` — build calldata for on-chain close
+- `publicKeyToAddress(publicKey)` — derive Ethereum address from secp256k1 pubkey
+
+**DB table:** `payment_channels` (id, contract_address, buyer_id, seller_id, deposit_usdc, chain_id, expiration, status, created_at, closed_at).
+
 ### 8.2 Stripe Escrow (Training Wheels Mode)
 
 Identical protocol logic, different settlement layer:
@@ -1153,6 +1203,11 @@ GET    /attestations/:pubkey           — query attestations about an agent
 POST   /disputes                       — file for arbitration
 GET    /disputes/:id                   — status
 POST   /disputes/:id/ruling            — arbitrator submits ruling
+
+# Payment Channels (§8.1.3)
+POST   /channels                       — register a payment channel
+GET    /channels/:address              — get channel details (parties only)
+POST   /channels/:address/close        — record channel closure
 ```
 
 **Spawn mechanics (`POST /agents/:pubkey/spawn`):**

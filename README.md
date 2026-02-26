@@ -113,15 +113,41 @@ Dual PaymentIntent pattern: buyer's payment + seller's collateral captured on ac
 ### On-Chain Escrow (Base L2 USDC)
 
 ```typescript
+// Propose with on-chain settlement
 const escrow = await buyer.proposeEscrow({
   seller: seller.publicKey,
   amountCents: 5000,
   taskSpec: { type: 'data-retrieval', query: 'quarterly earnings' },
   verificationMethod: 'automated_reasoning',
   fundingMode: 'onchain',
-  buyerAddress: '0x...',
+  buyerAddress: '0x...',  // Ethereum address
   sellerAddress: '0x...',
 })
+
+// Seller accepts -> API deploys EscrowInstance via factory (CREATE2)
+await seller.acceptEscrow(escrow.id)
+
+// Both parties fund the contract directly with USDC
+// (buyer deposits amountCents, seller deposits collateral)
+// API cron detects funding and activates escrow automatically
+
+// Deliver + verify -> gateway signs on-chain release
+await seller.deliver(escrow.id, { results: [...] })
+await buyer.confirmDelivery(escrow.id) // or automated verification
+```
+
+**Payment Channels** — for micro-transactions where per-tx gas is prohibitive:
+
+```typescript
+import { signChannelPayment, verifyChannelPayment, publicKeyToAddress } from '@trustthenverify/sdk'
+
+// Buyer signs incrementing off-chain payments
+const payment = await signChannelPayment(buyer.privateKey, channelAddress, 50_000_000n) // 50 USDC
+
+// Seller verifies and holds latest payment
+const valid = verifyChannelPayment(payment, buyer.publicKey) // true
+
+// Seller closes channel on-chain with highest payment
 ```
 
 ### MCP Server (for AI agents in Claude Desktop, Cursor, etc.)
@@ -229,17 +255,31 @@ wrangler secret put STRIPE_SECRET_KEY
 cd packages/api && wrangler deploy
 ```
 
-**Smart Contracts (Base L2):**
+**Smart Contracts (Base Sepolia):**
 
 ```bash
 cd packages/contracts
 cp .env.example .env
-# Edit .env with deployer key, USDC address, gateway address
+# Edit .env:
+#   DEPLOYER_KEY     — funded with Base Sepolia ETH
+#   USDC_ADDRESS     — 0x036CbD53842c5426634e7929541eC2318f3dCF7e (Circle testnet)
+#   GATEWAY_ADDRESS  — Ethereum address derived from GATEWAY_EOA_PRIVATE_KEY
+#   TREASURY_ADDRESS — receives arbitration fees
 
-forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast --verify
+forge script script/Deploy.s.sol \
+  --rpc-url https://sepolia.base.org \
+  --broadcast --verify
 ```
 
-Then set `ESCROW_FACTORY_ADDRESS` in wrangler secrets.
+Then set wrangler secrets for on-chain mode:
+```bash
+wrangler secret put ESCROW_FACTORY_ADDRESS
+wrangler secret put GATEWAY_EOA_PRIVATE_KEY
+# Optional overrides (defaults to Base Sepolia):
+# BASE_RPC_URL, BASE_CHAIN_ID
+```
+
+**Key separation:** `GATEWAY_PRIVATE_KEY` signs verification results (ECDSA). `GATEWAY_EOA_PRIVATE_KEY` signs Ethereum transactions (EIP-1559). Can be the same key.
 
 ## API Reference
 
@@ -264,6 +304,9 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/disputes/:id` | GET | Signed | Get dispute status + ruling |
 | `/attestations` | POST | Signed | Publish attestation |
 | `/attestations/:pubkey` | GET | None | Query attestations |
+| `/channels` | POST | Signed | Register payment channel |
+| `/channels/:address` | GET | Pubkey | Get channel details (parties only) |
+| `/channels/:address/close` | POST | Signed | Record channel closure |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.
 

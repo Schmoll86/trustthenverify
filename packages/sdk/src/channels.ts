@@ -3,8 +3,8 @@
  * Per SPEC-v2 §8. Uses @noble/secp256k1 for signing.
  */
 
-import { signAsync, verify, getPublicKey } from '@noble/secp256k1'
-import { sha256 } from '@noble/hashes/sha2.js'
+import { signAsync, verify, Point } from '@noble/secp256k1'
+import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
 
 export interface ChannelPayment {
@@ -23,24 +23,24 @@ export async function signChannelPayment(
   amount: bigint,
 ): Promise<ChannelPayment> {
   // Match Solidity: keccak256(abi.encodePacked(address(this), amount))
-  // We use sha256 as hash function (matching our contract's verification)
   const addrBytes = hexToBytes(channelAddress.startsWith('0x') ? channelAddress.slice(2) : channelAddress)
   const amountBytes = bigintToBytes32(amount)
   const packed = new Uint8Array([...addrBytes, ...amountBytes])
 
-  const messageHash = sha256(packed)
+  const messageHash = keccak_256(packed)
 
   // Ethereum signed message prefix
   const prefix = new TextEncoder().encode('\x19Ethereum Signed Message:\n32')
-  const ethSignedHash = sha256(new Uint8Array([...prefix, ...messageHash]))
+  const ethSignedHash = keccak_256(new Uint8Array([...prefix, ...messageHash]))
 
-  const sig = await signAsync(ethSignedHash, hexToBytes(privateKey), { prehash: false })
-  const sigBytes = sig as unknown as Uint8Array
+  // noble v3 'recovered' format: recovery(1) || r(32) || s(32)
+  const sigBytes = await signAsync(ethSignedHash, hexToBytes(privateKey), { prehash: false, format: 'recovered' }) as unknown as Uint8Array
 
-  // For Ethereum: 65 bytes = r(32) + s(32) + v(1)
-  const r = sigBytes.slice(0, 32)
-  const s = sigBytes.slice(32, 64)
-  const v = new Uint8Array([(sigBytes[64] ?? 0) + 27])
+  // Reformat to Ethereum convention: r(32) || s(32) || v(1), where v = recovery + 27
+  const recovery = sigBytes[0]
+  const r = sigBytes.slice(1, 33)
+  const s = sigBytes.slice(33, 65)
+  const v = new Uint8Array([recovery + 27])
   const fullSig = new Uint8Array([...r, ...s, ...v])
 
   return {
@@ -61,9 +61,9 @@ export function verifyChannelPayment(
   const amountBytes = bigintToBytes32(payment.amount)
   const packed = new Uint8Array([...addrBytes, ...amountBytes])
 
-  const messageHash = sha256(packed)
+  const messageHash = keccak_256(packed)
   const prefix = new TextEncoder().encode('\x19Ethereum Signed Message:\n32')
-  const ethSignedHash = sha256(new Uint8Array([...prefix, ...messageHash]))
+  const ethSignedHash = keccak_256(new Uint8Array([...prefix, ...messageHash]))
 
   const sigBytes = hexToBytes(payment.signature)
   // Strip the v byte for verification (noble uses compact 64-byte sigs)
@@ -77,21 +77,37 @@ export function verifyChannelPayment(
 }
 
 /**
- * Derive an Ethereum address from a secp256k1 public key.
- * Uses keccak-like hash of uncompressed public key, takes last 20 bytes.
- * Simplified: uses sha256 truncated (real impl would use keccak256).
+ * Derive an Ethereum address from a secp256k1 public key (compressed or uncompressed).
+ * keccak256(uncompressed[1:]) → last 20 bytes.
  */
 export function publicKeyToAddress(publicKey: string): string {
-  const pubBytes = hexToBytes(publicKey)
-  // Get uncompressed form if compressed
-  const uncompressed = pubBytes.length === 33
-    ? getPublicKey(pubBytes.slice(1), false) // This is wrong, need privkey
-    : pubBytes
-  const hash = sha256(uncompressed.length > 32 ? uncompressed.slice(1) : uncompressed)
+  const clean = publicKey.startsWith('0x') ? publicKey.slice(2) : publicKey
+  // Decompress if needed: Point.fromHex handles both compressed (33 bytes) and uncompressed (65 bytes)
+  const point = Point.fromHex(clean)
+  const uncompressed = point.toBytes(false) // 65 bytes: 0x04 + x(32) + y(32)
+  // keccak256 of the 64-byte public key (skip the 0x04 prefix)
+  const hash = keccak_256(uncompressed.slice(1))
   return '0x' + bytesToHex(hash.slice(12))
 }
 
 function bigintToBytes32(value: bigint): Uint8Array {
   const hex = value.toString(16).padStart(64, '0')
   return hexToBytes(hex)
+}
+
+// ── Calldata helpers for constructing raw transactions ──────────────────────
+
+/** Encode calldata for PaymentChannel.close(uint256 amount, bytes signature). */
+export function encodeChannelClose(amount: bigint, signature: string): string {
+  const sig = signature.startsWith('0x') ? signature.slice(2) : signature
+  // close(uint256,bytes) selector = keccak256("close(uint256,bytes)")[:4]
+  const selector = 'f65f53b3'
+  const amountHex = amount.toString(16).padStart(64, '0')
+  // Dynamic bytes offset (2 * 32 = 64 bytes from start of params)
+  const offset = '0000000000000000000000000000000000000000000000000000000000000040'
+  // Bytes length (65 for Ethereum signature)
+  const length = (sig.length / 2).toString(16).padStart(64, '0')
+  // Bytes data padded to 32-byte boundary
+  const padded = sig.padEnd(Math.ceil(sig.length / 64) * 64, '0')
+  return '0x' + selector + amountHex + offset + length + padded
 }
