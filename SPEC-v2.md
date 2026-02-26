@@ -1038,6 +1038,39 @@ Identical protocol logic, different settlement layer:
 
 This is NOT trustless — agents trust TTV with funds. But it eliminates the crypto on-ramp friction and works for developers who use Stripe today. The protocol API is identical; only the settlement method changes. Agents can migrate from Stripe escrow to on-chain escrow per-transaction as they become comfortable with crypto.
 
+#### 8.2.1 Stripe Connect Identity Model
+
+Agents establish Stripe identity before transacting:
+
+- **Buyers** create a Stripe Customer (`POST /agents/:pubkey/stripe/customer`), then attach a PaymentMethod (`POST /agents/:pubkey/stripe/payment-method`).
+- **Sellers** create a Stripe Express Connected Account (`POST /agents/:pubkey/stripe/connect`), completing Stripe's hosted onboarding flow.
+- **Status** can be checked via `GET /agents/:pubkey/stripe/status`.
+
+Agent table fields: `stripe_customer_id`, `stripe_connected_account_id`, `stripe_onboarding_complete`, `stripe_default_payment_method`.
+
+In production mode, escrow acceptance validates that the buyer has a Customer + PaymentMethod and the seller has a completed Connect account. In sandbox mode, these validations are skipped.
+
+#### 8.2.2 Dual Payment Intent Pattern
+
+Each Stripe-mode escrow creates two PaymentIntents for game-theoretic parity with on-chain escrow:
+
+| PI | Purpose | Amount |
+|---|---|---|
+| `stripe_buyer_pi_id` | Buyer's payment for the task | `amount_cents` |
+| `stripe_seller_collateral_pi_id` | Seller's collateral deposit | `seller_collateral` |
+
+Both PIs are captured atomically on escrow acceptance.
+
+#### 8.2.3 Resolution Outcomes
+
+| Outcome | Buyer PI | Seller Collateral PI |
+|---|---|---|
+| **Released** (success) | Transfer to seller's Connected Account | Refund to seller |
+| **Failed** (verification failure) | Refund to buyer | Kept by platform |
+| **Burned** (dispute timeout) | Kept by platform | Kept by platform |
+
+This mirrors the on-chain game theory: sellers risk collateral, incentivizing honest delivery.
+
 ---
 
 ## 9. API Design
@@ -1072,6 +1105,12 @@ GET    /agents/:pubkey                 — lookup
 GET    /agents/search                  — search by capabilities
 POST   /agents/:pubkey/verify          — keypair verification challenge
 POST   /agents/:pubkey/spawn           — spawn child agent (see below)
+
+# Stripe Onboarding (§8.2.1)
+POST   /agents/:pubkey/stripe/customer        — create Stripe Customer (buyer)
+POST   /agents/:pubkey/stripe/connect         — create Express Connected Account (seller)
+POST   /agents/:pubkey/stripe/payment-method  — attach PaymentMethod to Customer
+GET    /agents/:pubkey/stripe/status           — check onboarding completion
 
 # Policies
 POST   /policies                       — create policy (NL intent → formal_spec via translation pipeline)
@@ -1520,24 +1559,34 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** Subjective tasks verified by independent oracle consensus. Full design in §3.5.
 
-### Phase 7 — zkML Integration (when technology matures)
-48. `zkml_proof` verification method in Gateway
-49. Proof verification logic (constant-time, ~300ms)
-50. SDK: proof submission alongside deliverables
-51. Escrow contract: accept proof as release trigger
-52. Gateway self-verification (wrap Gateway's own AR logic in zkML proof)
+### Phase 7 — Stripe Connect (1–2 weeks) ✅
+
+48. Stripe Customer + Express Connected Account onboarding routes
+49. Dual PaymentIntent escrow (buyer payment + seller collateral)
+50. Game-theoretic resolution parity with on-chain (release/fail/burn)
+51. SDK methods: `setupStripeCustomer()`, `setupStripeConnect()`, `attachPaymentMethod()`, `getStripeStatus()`
+52. Sandbox mode bypass for Stripe validation (E2E testable without live Stripe)
+
+**Deliverable:** Full Stripe-mode escrow with per-agent identity, collateral enforcement, and outcome-based fund distribution.
+
+### Phase 8 — zkML Integration (when technology matures)
+53. `zkml_proof` verification method in Gateway
+54. Proof verification logic (constant-time, ~300ms)
+55. SDK: proof submission alongside deliverables
+56. Escrow contract: accept proof as release trigger
+57. Gateway self-verification (wrap Gateway's own AR logic in zkML proof)
 
 **Deliverable:** Cryptographic proof of execution compliance. Escrow becomes optional for proven tasks.
 
-### Phase 8 — Arbitration (ongoing)
-53. Arbitrator registry
-54. Arbitrator assignment (random from qualified pool)
-55. Ruling submission and escrow resolution
-56. Arbitrator reputation tracking
+### Phase 9 — Arbitration (ongoing)
+58. Arbitrator registry
+59. Arbitrator assignment (random from qualified pool)
+60. Ruling submission and escrow resolution
+61. Arbitrator reputation tracking
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) Phases 6–8 are ongoing. Phase 7 depends on external zkML maturation.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) Phases 6–9 are ongoing. Phase 8 depends on external zkML maturation.
 
 ---
 

@@ -15,6 +15,10 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('../lib/stripe', () => ({
   RealStripeService: class {
+    createCustomer = mockStripe.createCustomer
+    createConnectAccount = mockStripe.createConnectAccount
+    getAccountStatus = mockStripe.getAccountStatus
+    attachPaymentMethod = mockStripe.attachPaymentMethod
     captureEscrowFunds = mockStripe.captureEscrowFunds
     releaseFunds = mockStripe.releaseFunds
     burnFunds = mockStripe.burnFunds
@@ -69,6 +73,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       parent_id: null,
       created_at: new Date().toISOString(),
       last_seen_at: new Date().toISOString(),
+      stripe_customer_id: 'cus_buyer_test',
+      stripe_connected_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_default_payment_method: 'pm_buyer_test',
     },
     {
       id: 'seller-id',
@@ -80,6 +88,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       parent_id: null,
       created_at: new Date().toISOString(),
       last_seen_at: new Date().toISOString(),
+      stripe_customer_id: 'cus_seller_test',
+      stripe_connected_account_id: 'acct_seller_test',
+      stripe_onboarding_complete: true,
+      stripe_default_payment_method: 'pm_seller_test',
     },
   ])
 }
@@ -89,6 +101,11 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     id: 'escrow-1',
     contract_address: null,
     stripe_escrow_id: 'pi_mock_1',
+    stripe_buyer_pi_id: 'pi_mock_1',
+    stripe_seller_collateral_pi_id: null,
+    stripe_transfer_id: null,
+    buyer_payment_method_id: null,
+    seller_payment_method_id: null,
     buyer_id: 'buyer-id',
     seller_id: 'seller-id',
     amount_cents: 5000,
@@ -102,6 +119,13 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     proof: null,
     timeout_seconds: 3600,
     delivery_attempts: 0,
+    funding_mode: 'stripe',
+    buyer_address: null,
+    seller_address: null,
+    buyer_funded: false,
+    seller_funded: false,
+    chain_id: null,
+    tx_hash: null,
     created_at: new Date().toISOString(),
     funded_at: new Date().toISOString(),
     completed_at: null,

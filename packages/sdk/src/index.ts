@@ -41,6 +41,11 @@ export interface Agent {
   parentId: string | null
   createdAt: string
   lastSeenAt: string
+  // Phase 7: Stripe Connect identity
+  stripeCustomerId: string | null
+  stripeConnectedAccountId: string | null
+  stripeOnboardingComplete: boolean
+  stripeDefaultPaymentMethod: string | null
 }
 
 export interface Policy {
@@ -130,6 +135,12 @@ export interface Escrow {
   sellerFunded: boolean
   chainId: number | null
   txHash: string | null
+  // Phase 7: Stripe Connect per-escrow tracking
+  stripeBuyerPiId: string | null
+  stripeSellerCollateralPiId: string | null
+  stripeTransferId: string | null
+  buyerPaymentMethodId: string | null
+  sellerPaymentMethodId: string | null
 }
 
 export interface PaymentChannel {
@@ -601,6 +612,35 @@ export class TrustProtocol {
     return { suggestedRatio, confidence, dataPoints }
   }
 
+  // ── Stripe Onboarding (§10.4a) ───────────────────────────────────────────
+
+  async setupStripeCustomer(): Promise<Agent> {
+    return this.post(`/agents/${this.publicKey}/stripe/customer`, {})
+  }
+
+  async setupStripeConnect(params?: {
+    returnUrl?: string
+    refreshUrl?: string
+  }): Promise<{ agent: Agent; onboardingUrl: string }> {
+    return this.post(`/agents/${this.publicKey}/stripe/connect`, params ?? {})
+  }
+
+  async getStripeStatus(): Promise<{
+    hasCustomer: boolean
+    hasConnectAccount: boolean
+    onboardingComplete: boolean
+    chargesEnabled: boolean
+    payoutsEnabled: boolean
+  }> {
+    return this.get(`/agents/${this.publicKey}/stripe/status`)
+  }
+
+  async attachPaymentMethod(paymentMethodId: string): Promise<Agent> {
+    return this.post(`/agents/${this.publicKey}/stripe/payment-method`, { paymentMethodId })
+  }
+
+  // ── Escrow (§10.4) ───────────────────────────────────────────────────────
+
   async proposeEscrow(params: {
     seller: string
     amountCents: number
@@ -612,6 +652,7 @@ export class TrustProtocol {
     fundingMode?: FundingMode
     buyerAddress?: string
     sellerAddress?: string
+    buyerPaymentMethodId?: string
   }): Promise<Escrow> {
     return this.post('/escrow/propose', {
       seller: params.seller,
@@ -624,6 +665,7 @@ export class TrustProtocol {
       fundingMode: params.fundingMode,
       buyerAddress: params.buyerAddress,
       sellerAddress: params.sellerAddress,
+      buyerPaymentMethodId: params.buyerPaymentMethodId,
     })
   }
 

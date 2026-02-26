@@ -12,7 +12,7 @@ import { RealGatewayService } from '../lib/gateway'
 import type { OnchainService } from '../lib/onchain'
 import { RealOnchainService } from '../lib/onchain'
 import type { Escrow } from '@trustthenverify/sdk'
-import type { EscrowRow } from '../lib/types'
+import type { EscrowRow, AgentRow } from '../lib/types'
 
 type AppEnv = {
   Bindings: Env
@@ -94,6 +94,7 @@ escrow.post('/propose', async (c) => {
     fundingMode?: 'stripe' | 'onchain'
     buyerAddress?: string
     sellerAddress?: string
+    buyerPaymentMethodId?: string
   }
   try {
     body = JSON.parse(rawBody || '{}')
@@ -171,6 +172,7 @@ escrow.post('/propose', async (c) => {
       buyer_address: body.buyerAddress ?? null,
       seller_address: body.sellerAddress ?? null,
       chain_id: fundingMode === 'onchain' ? parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10) : null,
+      buyer_payment_method_id: body.buyerPaymentMethodId ?? null,
     })
     .select()
     .single()
@@ -259,19 +261,53 @@ escrow.post('/:id/accept', async (c) => {
   }
 
   // Stripe mode: proposed → active (atomic accept + fund)
-  let stripeEscrowId: string
+  let stripeBuyerPiId: string = 'sandbox_mock'
+  let stripeSellerCollateralPiId: string | null = null
 
   if (c.get('sandboxMode')) {
     // Sandbox: skip real Stripe calls
-    stripeEscrowId = 'sandbox_mock'
   } else {
+    // Look up buyer + seller Stripe identities
+    const { data: buyerAgent } = await db
+      .from('agents')
+      .select('*')
+      .eq('id', escrowRow.buyer_id)
+      .single()
+
+    const buyerRow = buyerAgent as AgentRow | null
+    if (!buyerRow?.stripe_customer_id) {
+      return error(c, 400, 'STRIPE_NOT_CONFIGURED', 'Buyer must set up Stripe Customer first')
+    }
+
+    const buyerPaymentMethodId = (escrowRow as unknown as Record<string, unknown>).buyer_payment_method_id as string | null
+      ?? buyerRow.stripe_default_payment_method
+    if (!buyerPaymentMethodId) {
+      return error(c, 400, 'STRIPE_NOT_CONFIGURED', 'Buyer must attach a payment method first')
+    }
+
+    const { data: sellerAgent } = await db
+      .from('agents')
+      .select('*')
+      .eq('id', escrowRow.seller_id)
+      .single()
+
+    const sellerRow = sellerAgent as AgentRow | null
+    if (!sellerRow?.stripe_connected_account_id || !sellerRow.stripe_onboarding_complete) {
+      return error(c, 400, 'STRIPE_NOT_CONFIGURED', 'Seller must complete Stripe Connect onboarding first')
+    }
+
     const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
     const result = await stripe.captureEscrowFunds({
       buyerAmountCents: escrowRow.amount_cents,
       sellerCollateralCents: escrowRow.seller_collateral,
       escrowId,
+      buyerCustomerId: buyerRow.stripe_customer_id,
+      buyerPaymentMethodId,
+      sellerCustomerId: sellerRow.stripe_customer_id ?? undefined,
+      sellerPaymentMethodId: sellerRow.stripe_default_payment_method ?? undefined,
     })
-    stripeEscrowId = result.stripeEscrowId
+    stripeBuyerPiId = result.stripeBuyerPiId
+    stripeSellerCollateralPiId = result.stripeSellerCollateralPiId
   }
 
   const timeoutSeconds = (row as Record<string, unknown>).timeout_seconds as number | undefined ?? 3600
@@ -281,7 +317,9 @@ escrow.post('/:id/accept', async (c) => {
     .from('escrows')
     .update({
       status: 'active',
-      stripe_escrow_id: stripeEscrowId,
+      stripe_escrow_id: stripeBuyerPiId, // backward compat
+      stripe_buyer_pi_id: stripeBuyerPiId,
+      stripe_seller_collateral_pi_id: stripeSellerCollateralPiId,
       funded_at: new Date().toISOString(),
       expires_at: newExpiresAt,
     })
@@ -489,12 +527,25 @@ escrow.post('/:id/deliver', async (c) => {
             resultDigest: proof, v: sig.v, r: sig.r, s: sig.s,
           })
         }
-      } else if (escrowRow.stripe_escrow_id) {
-        const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-        await stripe.releaseFunds({
-          stripeEscrowId: escrowRow.stripe_escrow_id,
-          sellerAmountCents: escrowRow.amount_cents + escrowRow.seller_collateral,
-        })
+      } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+        const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
+        // Look up seller's connected account for transfer
+        const { data: sellerAgent } = await db
+          .from('agents')
+          .select('*')
+          .eq('id', escrowRow.seller_id)
+          .single()
+        const sellerRow = sellerAgent as AgentRow | null
+        if (sellerRow?.stripe_connected_account_id) {
+          const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+          const { transferId } = await stripe.releaseFunds({
+            stripeBuyerPiId: buyerPiId,
+            sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+            sellerAmountCents: escrowRow.amount_cents,
+            stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+          })
+          await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+        }
       }
       const now = new Date().toISOString()
       const { data: released } = await db
@@ -521,11 +572,13 @@ escrow.post('/:id/deliver', async (c) => {
             resultDigest: proof, v: sig.v, r: sig.r, s: sig.s,
           })
         }
-      } else if (escrowRow.stripe_escrow_id) {
+      } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+        const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
         const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
         await stripe.refundBuyerAndBurnCollateral({
-          stripeEscrowId: escrowRow.stripe_escrow_id,
+          stripeBuyerPiId: buyerPiId,
           buyerRefundCents: escrowRow.amount_cents,
+          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
         })
       }
       const now = new Date().toISOString()
@@ -597,12 +650,25 @@ escrow.post('/:id/confirm', async (c) => {
     // On-chain: buyer confirms directly on contract (this API call just records the verification)
     // The actual fund transfer happens on-chain via confirmDelivery()
     // We record it here and update our DB state
-  } else if (escrowRow.stripe_escrow_id) {
-    const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-    await stripe.releaseFunds({
-      stripeEscrowId: escrowRow.stripe_escrow_id,
-      sellerAmountCents: escrowRow.amount_cents + escrowRow.seller_collateral,
-    })
+  } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+    const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
+    // Look up seller's connected account
+    const { data: sellerAgent } = await db
+      .from('agents')
+      .select('*')
+      .eq('id', escrowRow.seller_id)
+      .single()
+    const sellerRow = sellerAgent as AgentRow | null
+    if (sellerRow?.stripe_connected_account_id) {
+      const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+      const { transferId } = await stripe.releaseFunds({
+        stripeBuyerPiId: buyerPiId,
+        sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+        sellerAmountCents: escrowRow.amount_cents,
+        stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+      })
+      await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+    }
   }
 
   const now = new Date().toISOString()
@@ -689,9 +755,13 @@ escrow.post('/:id/dispute', async (c) => {
     if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
       // On-chain dispute happens directly on contract — just update DB state
       // Agents call dispute() on the contract themselves
-    } else if (escrowRow.stripe_escrow_id) {
+    } else if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
+      const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
       const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-      await stripe.burnFunds({ stripeEscrowId: escrowRow.stripe_escrow_id })
+      await stripe.burnFunds({
+        stripeBuyerPiId: buyerPiId,
+        stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+      })
     }
 
     const { data: updated } = await db

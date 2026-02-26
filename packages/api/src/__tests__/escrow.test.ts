@@ -14,6 +14,10 @@ vi.mock('@supabase/supabase-js', () => ({
 // Inject mock stripe into the escrow route module
 vi.mock('../lib/stripe', () => ({
   RealStripeService: class {
+    createCustomer = mockStripe.createCustomer
+    createConnectAccount = mockStripe.createConnectAccount
+    getAccountStatus = mockStripe.getAccountStatus
+    attachPaymentMethod = mockStripe.attachPaymentMethod
     captureEscrowFunds = mockStripe.captureEscrowFunds
     releaseFunds = mockStripe.releaseFunds
     burnFunds = mockStripe.burnFunds
@@ -64,6 +68,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       parent_id: null,
       created_at: new Date().toISOString(),
       last_seen_at: new Date().toISOString(),
+      stripe_customer_id: 'cus_buyer_test',
+      stripe_connected_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_default_payment_method: 'pm_buyer_test',
     },
     {
       id: 'seller-id',
@@ -75,6 +83,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       parent_id: null,
       created_at: new Date().toISOString(),
       last_seen_at: new Date().toISOString(),
+      stripe_customer_id: 'cus_seller_test',
+      stripe_connected_account_id: 'acct_seller_test',
+      stripe_onboarding_complete: true,
+      stripe_default_payment_method: 'pm_seller_test',
     },
   ])
 }
@@ -84,6 +96,11 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     id: 'escrow-1',
     contract_address: null,
     stripe_escrow_id: null,
+    stripe_buyer_pi_id: null,
+    stripe_seller_collateral_pi_id: null,
+    stripe_transfer_id: null,
+    buyer_payment_method_id: null,
+    seller_payment_method_id: null,
     buyer_id: 'buyer-id',
     seller_id: 'seller-id',
     amount_cents: 5000,
@@ -100,6 +117,14 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     funded_at: null,
     completed_at: null,
     expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    funding_mode: 'stripe',
+    buyer_address: null,
+    seller_address: null,
+    buyer_funded: false,
+    seller_funded: false,
+    chain_id: null,
+    tx_hash: null,
+    delivery_attempts: 0,
     ...overrides,
   }
   mockDb.seedTable('escrows', [escrow])
@@ -224,11 +249,14 @@ describe('POST /v2/escrow/:id/accept', () => {
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/accept', '{}', seller)
     expect(res.status).toBe(200)
 
-    const json = await res.json() as { data: { status: string; stripeEscrowId: string } }
+    const json = await res.json() as { data: { status: string; stripeBuyerPiId: string } }
     expect(json.data.status).toBe('active')
-    expect(json.data.stripeEscrowId).toBe('pi_mock_1')
+    expect(json.data.stripeBuyerPiId).toBeTruthy()
     expect(mockStripe.calls).toHaveLength(1)
     expect(mockStripe.calls[0].method).toBe('captureEscrowFunds')
+    // Verify new params are passed
+    expect(mockStripe.calls[0].params).toHaveProperty('buyerCustomerId', 'cus_buyer_test')
+    expect(mockStripe.calls[0].params).toHaveProperty('buyerPaymentMethodId', 'pm_buyer_test')
   })
 
   it('rejects non-seller', async () => {
@@ -248,6 +276,29 @@ describe('POST /v2/escrow/:id/accept', () => {
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/accept', '{}', seller)
     expect(res.status).toBe(409)
   })
+
+  it('rejects if buyer has no Stripe Customer', async () => {
+    // Override buyer to have no Stripe identity
+    mockDb.getTable('agents').rows[0].stripe_customer_id = null
+    mockDb.getTable('agents').rows[0].stripe_default_payment_method = null
+    seedEscrow()
+
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/accept', '{}', seller)
+    expect(res.status).toBe(400)
+    const json = await res.json() as { error: { code: string } }
+    expect(json.error.code).toBe('STRIPE_NOT_CONFIGURED')
+  })
+
+  it('rejects if seller has incomplete Stripe onboarding', async () => {
+    // Override seller to have incomplete onboarding
+    mockDb.getTable('agents').rows[1].stripe_onboarding_complete = false
+    seedEscrow()
+
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/accept', '{}', seller)
+    expect(res.status).toBe(400)
+    const json = await res.json() as { error: { code: string } }
+    expect(json.error.code).toBe('STRIPE_NOT_CONFIGURED')
+  })
 })
 
 describe('POST /v2/escrow/:id/deliver', () => {
@@ -263,7 +314,7 @@ describe('POST /v2/escrow/:id/deliver', () => {
   })
 
   it('seller delivers → delivered with proof hash', async () => {
-    seedEscrow({ status: 'active', stripe_escrow_id: 'pi_mock_1' })
+    seedEscrow({ status: 'active', stripe_buyer_pi_id: 'pi_buyer_mock_1', stripe_escrow_id: 'pi_buyer_mock_1' })
 
     const deliverable = { results: ['result1', 'result2'] }
     const body = JSON.stringify({ deliverable })
@@ -314,7 +365,13 @@ describe('POST /v2/escrow/:id/confirm', () => {
   })
 
   it('buyer confirms → released + funds released', async () => {
-    seedEscrow({ status: 'delivered', stripe_escrow_id: 'pi_mock_1', proof: 'abc123' })
+    seedEscrow({
+      status: 'delivered',
+      stripe_buyer_pi_id: 'pi_buyer_mock_1',
+      stripe_escrow_id: 'pi_buyer_mock_1',
+      stripe_seller_collateral_pi_id: 'pi_collateral_mock_1',
+      proof: 'abc123',
+    })
 
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/confirm', '{}', buyer)
     expect(res.status).toBe(200)
@@ -324,6 +381,10 @@ describe('POST /v2/escrow/:id/confirm', () => {
     expect(json.data.completedAt).toBeTruthy()
     expect(mockStripe.calls).toHaveLength(1)
     expect(mockStripe.calls[0].method).toBe('releaseFunds')
+    // Verify new params
+    expect(mockStripe.calls[0].params).toHaveProperty('stripeBuyerPiId', 'pi_buyer_mock_1')
+    expect(mockStripe.calls[0].params).toHaveProperty('sellerConnectedAccountId', 'acct_seller_test')
+    expect(mockStripe.calls[0].params).toHaveProperty('stripeSellerCollateralPiId', 'pi_collateral_mock_1')
 
     // Verification record should be inserted
     const verifications = mockDb.getTable('verifications').rows
@@ -359,7 +420,12 @@ describe('POST /v2/escrow/:id/dispute', () => {
   })
 
   it('buyer disputes active escrow → burned', async () => {
-    seedEscrow({ status: 'active', stripe_escrow_id: 'pi_mock_1' })
+    seedEscrow({
+      status: 'active',
+      stripe_buyer_pi_id: 'pi_buyer_mock_1',
+      stripe_escrow_id: 'pi_buyer_mock_1',
+      stripe_seller_collateral_pi_id: 'pi_collateral_mock_1',
+    })
 
     const body = JSON.stringify({ reason: 'seller unresponsive' })
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/dispute', body, buyer)
@@ -369,6 +435,8 @@ describe('POST /v2/escrow/:id/dispute', () => {
     expect(json.data.status).toBe('burned')
     expect(mockStripe.calls).toHaveLength(1)
     expect(mockStripe.calls[0].method).toBe('burnFunds')
+    expect(mockStripe.calls[0].params).toHaveProperty('stripeBuyerPiId', 'pi_buyer_mock_1')
+    expect(mockStripe.calls[0].params).toHaveProperty('stripeSellerCollateralPiId', 'pi_collateral_mock_1')
 
     // Dispute record
     const disputes = mockDb.getTable('disputes').rows
@@ -377,7 +445,11 @@ describe('POST /v2/escrow/:id/dispute', () => {
   })
 
   it('seller disputes delivered escrow → burned', async () => {
-    seedEscrow({ status: 'delivered', stripe_escrow_id: 'pi_mock_1' })
+    seedEscrow({
+      status: 'delivered',
+      stripe_buyer_pi_id: 'pi_buyer_mock_1',
+      stripe_escrow_id: 'pi_buyer_mock_1',
+    })
 
     const body = JSON.stringify({ reason: 'buyer unreasonable' })
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/dispute', body, seller)
@@ -402,6 +474,10 @@ describe('POST /v2/escrow/:id/dispute', () => {
       parent_id: null,
       created_at: new Date().toISOString(),
       last_seen_at: new Date().toISOString(),
+      stripe_customer_id: null,
+      stripe_connected_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_default_payment_method: null,
     })
 
     const body = JSON.stringify({ reason: 'not my business' })
@@ -485,7 +561,9 @@ describe('Full happy path: propose → accept → deliver → confirm', () => {
     // Verify Stripe calls
     expect(mockStripe.calls).toHaveLength(2)
     expect(mockStripe.calls[0].method).toBe('captureEscrowFunds')
+    expect(mockStripe.calls[0].params).toHaveProperty('buyerCustomerId', 'cus_buyer_test')
     expect(mockStripe.calls[1].method).toBe('releaseFunds')
+    expect(mockStripe.calls[1].params).toHaveProperty('sellerConnectedAccountId', 'acct_seller_test')
 
     // Verify verification record
     const verifications = mockDb.getTable('verifications').rows

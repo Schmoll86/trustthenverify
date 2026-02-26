@@ -65,10 +65,12 @@ export async function handleEscrowTimeout(
         } catch {
           // Non-fatal
         }
-      } else if (row.stripe_escrow_id) {
+      } else if (row.stripe_buyer_pi_id ?? row.stripe_escrow_id) {
+        const buyerPiId = row.stripe_buyer_pi_id ?? row.stripe_escrow_id!
         await stripeService.refundBuyerAndBurnCollateral({
-          stripeEscrowId: row.stripe_escrow_id,
+          stripeBuyerPiId: buyerPiId,
           buyerRefundCents: row.amount_cents,
+          stripeSellerCollateralPiId: row.stripe_seller_collateral_pi_id ?? undefined,
         })
       }
       await db

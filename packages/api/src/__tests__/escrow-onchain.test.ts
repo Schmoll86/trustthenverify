@@ -15,6 +15,10 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('../lib/stripe', () => ({
   RealStripeService: class {
+    createCustomer = mockStripe.createCustomer
+    createConnectAccount = mockStripe.createConnectAccount
+    getAccountStatus = mockStripe.getAccountStatus
+    attachPaymentMethod = mockStripe.attachPaymentMethod
     captureEscrowFunds = mockStripe.captureEscrowFunds
     releaseFunds = mockStripe.releaseFunds
     burnFunds = mockStripe.burnFunds
@@ -75,6 +79,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       capabilities: [],
       metadata: {},
       parent_id: null,
+      stripe_customer_id: 'cus_buyer_test',
+      stripe_connected_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_default_payment_method: 'pm_buyer_test',
     },
     {
       id: 'seller-id',
@@ -84,6 +92,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       capabilities: [],
       metadata: {},
       parent_id: null,
+      stripe_customer_id: 'cus_seller_test',
+      stripe_connected_account_id: 'acct_seller_test',
+      stripe_onboarding_complete: true,
+      stripe_default_payment_method: 'pm_seller_test',
     },
   ])
 }
@@ -208,6 +220,10 @@ describe('On-chain escrow lifecycle', () => {
       funding_mode: 'stripe',
       buyer_funded: false,
       seller_funded: false,
+      buyer_payment_method_id: null,
+      stripe_buyer_pi_id: null,
+      stripe_seller_collateral_pi_id: null,
+      stripe_transfer_id: null,
     }])
 
     const res = await makeSignedRequest('POST', `/v2/escrow/${escrowId}/accept`, '{}', seller)
@@ -217,6 +233,7 @@ describe('On-chain escrow lifecycle', () => {
     expect(json.data.status).toBe('active')
     expect(mockStripe.calls.length).toBe(1)
     expect(mockStripe.calls[0].method).toBe('captureEscrowFunds')
+    expect(mockStripe.calls[0].params).toHaveProperty('buyerCustomerId', 'cus_buyer_test')
     expect(mockOnchain.calls.length).toBe(0)
   })
 

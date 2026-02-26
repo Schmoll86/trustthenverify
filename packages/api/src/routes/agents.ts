@@ -5,6 +5,8 @@ import { snakeToCamel } from '../lib/case'
 import { success, error } from '../lib/response'
 import type { Agent } from '@trustthenverify/sdk'
 import type { AgentRow } from '../lib/types'
+import type { StripeService } from '../lib/stripe'
+import { RealStripeService } from '../lib/stripe'
 
 type AppEnv = {
   Bindings: Env
@@ -13,7 +15,15 @@ type AppEnv = {
     agentId?: string
     sandboxMode?: boolean
     rawBody?: string
+    stripe?: StripeService
   }
+}
+
+/** Get or create StripeService. Tests inject via c.set('stripe', mock). */
+function getStripe(c: { env: Env; get(key: 'stripe'): StripeService | undefined }): StripeService {
+  const injected = c.get('stripe')
+  if (injected) return injected
+  return new RealStripeService(c.env.STRIPE_SECRET_KEY)
 }
 
 export const agents = new Hono<AppEnv>()
@@ -224,4 +234,210 @@ agents.post('/:pubkey/spawn', async (c) => {
   }
 
   return success(c, snakeToCamel<Agent>(row), 201)
+})
+
+// ── Stripe onboarding routes ──────────────────────────────────────────────
+
+// POST /agents/:pubkey/stripe/customer — create Stripe Customer for buyer
+agents.post('/:pubkey/stripe/customer', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only set up Stripe for your own agent')
+  }
+
+  const db = createDb(c.env)
+  const { data: agent } = await db
+    .from('agents')
+    .select('*')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const row = agent as AgentRow
+  if (row.stripe_customer_id) {
+    return error(c, 409, 'ALREADY_EXISTS', 'Agent already has a Stripe Customer')
+  }
+
+  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+  const { customerId } = await stripe.createCustomer({
+    agentId: row.id,
+    name: row.name ?? undefined,
+  })
+
+  const { data: updated } = await db
+    .from('agents')
+    .update({ stripe_customer_id: customerId })
+    .eq('id', row.id)
+    .select()
+    .single()
+
+  if (!updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update agent')
+  }
+
+  return success(c, snakeToCamel<Agent>(updated))
+})
+
+// POST /agents/:pubkey/stripe/connect — create Express account for seller
+agents.post('/:pubkey/stripe/connect', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only set up Stripe for your own agent')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { returnUrl?: string; refreshUrl?: string }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  const db = createDb(c.env)
+  const { data: agent } = await db
+    .from('agents')
+    .select('*')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const row = agent as AgentRow
+  if (row.stripe_connected_account_id) {
+    return error(c, 409, 'ALREADY_EXISTS', 'Agent already has a Stripe Connect account')
+  }
+
+  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+  const { accountId, onboardingUrl } = await stripe.createConnectAccount({
+    agentId: row.id,
+    returnUrl: body.returnUrl ?? 'https://trustthenverify.com/onboarding/complete',
+    refreshUrl: body.refreshUrl ?? 'https://trustthenverify.com/onboarding/refresh',
+  })
+
+  const { data: updated } = await db
+    .from('agents')
+    .update({ stripe_connected_account_id: accountId })
+    .eq('id', row.id)
+    .select()
+    .single()
+
+  if (!updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update agent')
+  }
+
+  return success(c, { agent: snakeToCamel<Agent>(updated), onboardingUrl })
+})
+
+// GET /agents/:pubkey/stripe/status — check onboarding completion
+agents.get('/:pubkey/stripe/status', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const db = createDb(c.env)
+
+  const { data: agent } = await db
+    .from('agents')
+    .select('*')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const row = agent as AgentRow
+  if (!row.stripe_connected_account_id) {
+    return success(c, {
+      hasCustomer: !!row.stripe_customer_id,
+      hasConnectAccount: false,
+      onboardingComplete: false,
+      chargesEnabled: false,
+      payoutsEnabled: false,
+    })
+  }
+
+  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+  const status = await stripe.getAccountStatus(row.stripe_connected_account_id)
+
+  // Auto-update onboarding_complete flag if not yet set
+  if (status.chargesEnabled && status.payoutsEnabled && !row.stripe_onboarding_complete) {
+    await db
+      .from('agents')
+      .update({ stripe_onboarding_complete: true })
+      .eq('id', row.id)
+  }
+
+  return success(c, {
+    hasCustomer: !!row.stripe_customer_id,
+    hasConnectAccount: true,
+    onboardingComplete: status.chargesEnabled && status.payoutsEnabled,
+    chargesEnabled: status.chargesEnabled,
+    payoutsEnabled: status.payoutsEnabled,
+  })
+})
+
+// POST /agents/:pubkey/stripe/payment-method — attach payment method to Customer
+agents.post('/:pubkey/stripe/payment-method', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only attach payment methods to your own agent')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { paymentMethodId?: string }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  if (!body.paymentMethodId) {
+    return error(c, 400, 'INVALID_PARAMS', 'paymentMethodId is required')
+  }
+
+  const db = createDb(c.env)
+  const { data: agent } = await db
+    .from('agents')
+    .select('*')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const row = agent as AgentRow
+  if (!row.stripe_customer_id) {
+    return error(c, 400, 'INVALID_PARAMS', 'Agent must have a Stripe Customer first. Call POST /agents/:pubkey/stripe/customer')
+  }
+
+  if (!c.get('sandboxMode')) {
+    const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+    await stripe.attachPaymentMethod({
+      customerId: row.stripe_customer_id,
+      paymentMethodId: body.paymentMethodId,
+    })
+  }
+
+  const { data: updated } = await db
+    .from('agents')
+    .update({ stripe_default_payment_method: body.paymentMethodId })
+    .eq('id', row.id)
+    .select()
+    .single()
+
+  if (!updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update agent')
+  }
+
+  return success(c, snakeToCamel<Agent>(updated))
 })

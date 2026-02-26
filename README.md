@@ -87,6 +87,29 @@ const escrow = await buyer.proposeEscrow({
 })
 ```
 
+### Stripe Connect (Off-Chain Escrow)
+
+```typescript
+// Buyer: set up Stripe identity
+await buyer.setupStripeCustomer()
+await buyer.attachPaymentMethod('pm_card_visa')
+
+// Seller: set up Stripe Connect (Express account)
+const { onboardingUrl } = await seller.setupStripeConnect()
+// Seller completes Stripe's hosted onboarding at onboardingUrl
+
+// Escrow with Stripe payment
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
+  amountCents: 500,
+  taskSpec: { query: 'AI frameworks' },
+  verificationMethod: 'buyer_confirm',
+  buyerPaymentMethodId: 'pm_card_visa',
+})
+```
+
+Dual PaymentIntent pattern: buyer's payment + seller's collateral captured on accept, distributed based on outcome (release/fail/burn).
+
 ### On-Chain Escrow (Base L2 USDC)
 
 ```typescript

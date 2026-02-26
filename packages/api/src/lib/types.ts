@@ -10,6 +10,11 @@ export interface AgentRow {
   parent_id: string | null
   created_at: string
   last_seen_at: string
+  // Phase 7: Stripe Connect identity
+  stripe_customer_id: string | null
+  stripe_connected_account_id: string | null
+  stripe_onboarding_complete: boolean
+  stripe_default_payment_method: string | null
 }
 
 export interface PolicyRow {
@@ -64,6 +69,12 @@ export interface EscrowRow {
   seller_funded: boolean
   chain_id: number | null
   tx_hash: string | null
+  // Phase 7: Stripe Connect per-escrow tracking
+  stripe_buyer_pi_id: string | null
+  stripe_seller_collateral_pi_id: string | null
+  stripe_transfer_id: string | null
+  buyer_payment_method_id: string | null
+  seller_payment_method_id: string | null
 }
 
 export interface PaymentChannelRow {
