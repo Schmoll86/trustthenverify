@@ -8,7 +8,10 @@ import { RealStripeService } from '../lib/stripe'
 import type { StripeService } from '../lib/stripe'
 import type { OnchainService } from '../lib/onchain'
 import { RealOnchainService } from '../lib/onchain'
-import type { EscrowRow } from '../lib/types'
+import type { EscrowRow, OracleTaskRow } from '../lib/types'
+import { RealOracleService } from '../lib/oracle-service'
+import type { OracleService } from '../lib/oracle-service'
+import { checkConsensus } from '../lib/oracle-service'
 
 export async function handleEscrowTimeout(
   env: Env,
@@ -137,6 +140,78 @@ export async function handleOnchainFunding(
   }
 
   return { activated }
+}
+
+/** Sweep expired oracle tasks — resolve with partial votes or fallback to buyer_confirm. */
+export async function handleOracleTimeout(
+  env: Env,
+  oracleService?: OracleService,
+): Promise<{ processed: number }> {
+  const db = createDb(env)
+  const oracle = oracleService ?? new RealOracleService(db, env)
+  const now = new Date().toISOString()
+
+  // Query voting oracle tasks past their expiry
+  const { data: expired } = await db
+    .from('oracle_tasks')
+    .select('*')
+    .eq('status', 'voting')
+    .lt('expires_at', now)
+
+  if (!expired || expired.length === 0) {
+    return { processed: 0 }
+  }
+
+  let processed = 0
+
+  for (const row of expired as OracleTaskRow[]) {
+    // Expire pending votes
+    await db
+      .from('oracle_votes')
+      .update({ status: 'expired' })
+      .eq('oracle_task_id', row.id)
+      .eq('status', 'pending')
+
+    // Check if quorum was reached with partial votes
+    const result = checkConsensus(row.votes_pass, row.votes_fail, row.quorum, row.total_oracles)
+
+    if (result.decided && result.consensus !== 'no_consensus') {
+      // Quorum reached despite timeout — finalize with result
+      await db
+        .from('oracle_tasks')
+        .update({
+          status: 'decided',
+          consensus: result.consensus,
+          decided_at: now,
+        })
+        .eq('id', row.id)
+
+      await oracle.finalizeTask(row.id, result.consensus)
+    } else {
+      // No quorum — mark expired, fallback to buyer_confirm
+      await db
+        .from('oracle_tasks')
+        .update({
+          status: 'expired',
+          consensus: 'no_consensus',
+          decided_at: now,
+        })
+        .eq('id', row.id)
+
+      // Fallback: change escrow verification to buyer_confirm
+      await db
+        .from('escrows')
+        .update({ verification_method: 'buyer_confirm' })
+        .eq('id', row.escrow_id)
+
+      // Still finalize to create payment records for oracles who voted
+      await oracle.finalizeTask(row.id, 'no_consensus')
+    }
+
+    processed++
+  }
+
+  return { processed }
 }
 
 function createOnchainService(env: Env): OnchainService {

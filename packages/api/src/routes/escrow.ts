@@ -431,6 +431,17 @@ escrow.post('/:id/deliver', async (c) => {
 
   // Automated verification for non-buyer_confirm methods
   const method = escrowRow.verification_method
+
+  if (method === 'oracle_consensus') {
+    // Dispatch to oracle pool via queue
+    await c.env.QUEUE.send({
+      type: 'oracle_dispatch',
+      escrowId,
+      deliverable: body.deliverable,
+    })
+    return success(c, snakeToCamel<Escrow>(updated))
+  }
+
   if (method === 'automated_reasoning' || method === 'schema_validation') {
     const gateway = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
 

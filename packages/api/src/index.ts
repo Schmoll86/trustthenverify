@@ -7,8 +7,10 @@ import { escrow } from './routes/escrow'
 import { verify } from './routes/verify'
 import { attestations } from './routes/attestations'
 import { disputes } from './routes/disputes'
-import { handleEscrowTimeout, handleOnchainFunding } from './cron/escrow-timeout'
+import { oracles } from './routes/oracles'
+import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout } from './cron/escrow-timeout'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
+import { handleOracleDispatch, type OracleQueueMessage } from './queue/oracle-consumer'
 
 type AppEnv = {
   Bindings: Env
@@ -35,18 +37,22 @@ app.route('/v2/escrow', escrow)
 app.route('/v2/verify', verify)
 app.route('/v2/attestations', attestations)
 app.route('/v2/disputes', disputes)
+app.route('/v2/oracles', oracles)
 
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, env: Env) {
     await handleEscrowTimeout(env)
     await handleOnchainFunding(env)
+    await handleOracleTimeout(env)
   },
-  async queue(batch: MessageBatch<ArgusQueueMessage>, env: Env) {
+  async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage>, env: Env) {
     for (const msg of batch.messages) {
       try {
         if (msg.body.type === 'argus_refine') {
-          await handleArgusMessage(msg.body, env)
+          await handleArgusMessage(msg.body as ArgusQueueMessage, env)
+        } else if (msg.body.type === 'oracle_dispatch') {
+          await handleOracleDispatch(msg.body as OracleQueueMessage, env)
         }
         msg.ack()
       } catch {

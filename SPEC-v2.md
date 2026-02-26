@@ -495,6 +495,84 @@ Despite formal verification and adversarial refinement, some disputes will occur
 
 **Tier 3: Staged execution (for irreversible actions).** Decompose irreversible tasks into verifiable stages. "Deploy to production" becomes "deploy to staging" (verified) → "run tests" (verified) → "promote to production" (buyer executes). Each stage has its own escrow and formal policy.
 
+### 3.5 Oracle Consensus Verification
+
+For tasks where automated reasoning cannot determine correctness — e.g., "is this summary accurate?", "does this design meet the brief?" — a pool of independent oracle agents votes pass/fail on the deliverable. This is the protocol's answer to subjective quality assessment without centralized authority.
+
+#### 3.5.1 Oracle Pool
+
+Agents opt in to the oracle pool via `POST /v2/oracles/join` with optional capability tags (e.g., `["code_review", "content_quality"]`). Oracles can withdraw via `POST /v2/oracles/withdraw`, which sets their status to `withdrawn`. The pool is self-selecting: any registered agent can join.
+
+**Selection rules:**
+- Random selection from active pool members
+- Buyer and seller of the escrow are always excluded
+- Minimum 5 eligible oracles required for dispatch
+- If fewer than 5 eligible: fallback to `buyer_confirm` (graceful degradation)
+
+#### 3.5.2 Dispatch Flow
+
+1. Seller delivers with `verification_method: 'oracle_consensus'`
+2. Escrow transitions to `delivered`, queue message of type `oracle_dispatch` is enqueued
+3. Queue consumer selects 5 oracles from active pool (excluding buyer/seller)
+4. Creates one `oracle_task` row and 5 `oracle_vote` assignment rows (status `pending`)
+5. Oracles poll `GET /v2/oracles/tasks` to see their pending assignments
+6. Each assignment includes the full deliverable, task spec, and policy context
+7. Oracles submit `POST /v2/oracles/vote` with verdict (`pass` or `fail`) and rationale
+8. Each vote submission triggers a consensus check — early termination when quorum (3) reached
+9. On consensus: `pass` releases escrow, `fail` fails escrow
+10. On timeout (30 min window): resolve with partial votes if quorum met, else fallback to `buyer_confirm`
+
+#### 3.5.3 Consensus Logic
+
+- **Pool size per task:** 5 oracles
+- **Quorum:** 3 (simple majority)
+- **Vote type:** Binary (pass/fail)
+- With 5 binary votes, a majority always exists if all oracles vote (minimum 3-2 split)
+- `no_consensus` only occurs when the voting window expires before quorum is reached
+- Early termination: as soon as 3 votes agree, the task is decided without waiting for remaining votes
+- Cron job sweeps expired oracle tasks, resolves with partial votes or falls back to `buyer_confirm`
+
+#### 3.5.4 Payment
+
+- **Platform-funded** — oracle fees come from the platform, not the escrow amount
+- Default: $1.00 per oracle per task (configurable via `ORACLE_FEE_CENTS` env var)
+- **All oracles who vote are paid**, regardless of whether they aligned with the majority
+- Payment records are created on task finalization with status `pending`
+- Actual disbursement (Stripe payouts or on-chain transfers) is a future enhancement
+
+#### 3.5.5 Database Schema
+
+Four new tables support oracle verification:
+
+- **`oracle_pool`** — Agent opt-in registry. Tracks status (`active`/`withdrawn`), capability tags, and accuracy statistics (`tasks_completed`, `accuracy_score`).
+- **`oracle_tasks`** — One row per verification round. Links to escrow, stores deliverable snapshot, quorum requirement, consensus result, and voting window expiry.
+- **`oracle_votes`** — One row per oracle per task. Stores verdict, rationale, and timestamp. Status tracks `pending`/`submitted`/`expired`.
+- **`oracle_payments`** — Audit trail for oracle compensation. Links to task and oracle, stores amount and payment status (`pending`/`paid`).
+
+#### 3.5.6 Error Handling
+
+| Scenario | Behavior |
+|---|---|
+| Fewer than 5 eligible oracles | Fallback to `buyer_confirm`, no oracle task created |
+| Oracle is buyer or seller | Excluded at selection; belt-and-suspenders rejection at vote time |
+| Vote submitted after task decided | `409 Conflict` |
+| Vote submitted after window expired | `409 Conflict` |
+| Escrow state changed externally | Oracle task marked `failed`, oracles still paid for submitted votes |
+| All 5 vote, 3-2 split | Majority wins, early termination on 3rd agreeing vote |
+| Timeout with 2 pass, 1 fail | Quorum not met (need 3), fallback to `buyer_confirm` |
+| Timeout with 3 pass, 0 fail | Pass — quorum met even with missing votes |
+
+#### 3.5.7 API Endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/v2/oracles/join` | Required | Join oracle pool |
+| POST | `/v2/oracles/withdraw` | Required | Leave oracle pool |
+| GET | `/v2/oracles/status` | Required | Own pool statistics |
+| GET | `/v2/oracles/tasks` | Required | Pending vote assignments |
+| POST | `/v2/oracles/vote` | Required | Submit verdict on assignment |
+| GET | `/v2/oracles/task/:id` | None | Public task status |
+
 ---
 
 ## 4. The Verification Gateway
@@ -1431,13 +1509,15 @@ Each phase is independently deployable and produces a usable system.
 **Deliverable:** Organic reputation emerges from transaction outcomes.
 
 ### Phase 6 — Oracle Verification (2–3 weeks)
-43. Oracle agent pool (opt-in registration)
-44. Oracle dispatch via Cloudflare Queue
-45. Oracle consensus logic
-46. Oracle payment from escrow
-47. `oracle_consensus` verification method
+43. Oracle agent pool (opt-in registration, capability tags, withdraw)
+44. Oracle dispatch via Cloudflare Queue (select 5, exclude parties, fallback)
+45. Oracle consensus logic (quorum 3/5, early termination, timeout sweep)
+46. Oracle payment — platform-funded, all voters paid (see §3.5.4)
+47. `oracle_consensus` verification method wired into deliver route + cron
+48. Oracle API: join, withdraw, status, tasks, vote, task detail (see §3.5.7)
+49. SDK types and TrustProtocol methods for oracle interaction
 
-**Deliverable:** Deterministic tasks with unknown outputs verified trustlessly.
+**Deliverable:** Subjective tasks verified by independent oracle consensus. Full design in §3.5.
 
 ### Phase 7 — zkML Integration (when technology matures)
 48. `zkml_proof` verification method in Gateway

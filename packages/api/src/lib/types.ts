@@ -136,3 +136,55 @@ export interface AttestationRow {
   nostr_event_id: string | null
   created_at: string
 }
+
+// Phase 6: Oracle Verification
+
+export interface OraclePoolRow {
+  id: string
+  agent_id: string
+  status: 'active' | 'withdrawn'
+  capabilities: string[]
+  tasks_completed: number
+  accuracy_score: number
+  created_at: string
+  updated_at: string
+}
+
+export interface OracleTaskRow {
+  id: string
+  escrow_id: string
+  status: 'pending' | 'voting' | 'decided' | 'expired' | 'failed'
+  quorum: number
+  total_oracles: number
+  consensus: 'pass' | 'fail' | 'no_consensus' | null
+  deliverable: Record<string, unknown>
+  task_spec: string | null
+  policy_id: string | null
+  votes_pass: number
+  votes_fail: number
+  expires_at: string
+  decided_at: string | null
+  created_at: string
+}
+
+export interface OracleVoteRow {
+  id: string
+  oracle_task_id: string
+  oracle_id: string
+  agent_id: string
+  status: 'pending' | 'submitted' | 'expired'
+  verdict: 'pass' | 'fail' | null
+  rationale: string | null
+  submitted_at: string | null
+  created_at: string
+}
+
+export interface OraclePaymentRow {
+  id: string
+  oracle_task_id: string
+  oracle_id: string
+  agent_id: string
+  amount_cents: number
+  status: 'pending' | 'paid'
+  created_at: string
+}

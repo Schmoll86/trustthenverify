@@ -188,6 +188,56 @@ export interface Dispute {
   resolvedAt: string | null
 }
 
+// Phase 6: Oracle Consensus (§3.5)
+
+export interface OraclePoolEntry {
+  id: string
+  agentId: string
+  status: 'active' | 'withdrawn'
+  capabilities: string[]
+  tasksCompleted: number
+  accuracyScore: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OracleTask {
+  id: string
+  escrowId: string
+  status: 'pending' | 'voting' | 'decided' | 'expired' | 'failed'
+  quorum: number
+  totalOracles: number
+  consensus: 'pass' | 'fail' | 'no_consensus' | null
+  deliverable: Record<string, unknown>
+  taskSpec: string | null
+  policyId: string | null
+  votesPass: number
+  votesFail: number
+  expiresAt: string
+  decidedAt: string | null
+  createdAt: string
+}
+
+export interface OracleAssignment {
+  id: string
+  oracleTaskId: string
+  oracleId: string
+  agentId: string
+  status: 'pending' | 'submitted' | 'expired'
+  verdict: 'pass' | 'fail' | null
+  rationale: string | null
+  submittedAt: string | null
+  createdAt: string
+  oracleTask: OracleTask
+}
+
+export interface OracleVoteResult {
+  voted: boolean
+  verdict: 'pass' | 'fail'
+  consensus: 'pass' | 'fail' | 'no_consensus' | null
+  task: OracleTask
+}
+
 export interface CollateralSuggestion {
   suggestedRatio: number
   confidence: 'low' | 'medium' | 'high'
@@ -631,6 +681,36 @@ export class TrustProtocol {
     verificationMethod?: string
   }): Promise<Attestation> {
     return this.post('/attestations', params)
+  }
+
+  // ── Oracle Pool (§3.5) ──────────────────────────────────────────────────
+
+  async joinOraclePool(params?: { capabilities?: string[] }): Promise<OraclePoolEntry> {
+    return this.post('/oracles/join', params ?? {})
+  }
+
+  async withdrawFromOraclePool(): Promise<OraclePoolEntry> {
+    return this.post('/oracles/withdraw', {})
+  }
+
+  async getOracleStatus(): Promise<OraclePoolEntry> {
+    return this.get('/oracles/status')
+  }
+
+  async getOracleAssignments(): Promise<OracleAssignment[]> {
+    return this.get('/oracles/tasks')
+  }
+
+  async submitOracleVote(params: {
+    oracleTaskId: string
+    verdict: 'pass' | 'fail'
+    rationale?: string
+  }): Promise<OracleVoteResult> {
+    return this.post('/oracles/vote', params)
+  }
+
+  async getOracleTask(taskId: string): Promise<OracleTask> {
+    return this.get(`/oracles/task/${taskId}`)
   }
 
   // ── Observations (local — §7) ────────────────────────────────────────────
