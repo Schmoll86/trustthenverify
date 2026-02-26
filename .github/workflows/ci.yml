@@ -23,6 +23,11 @@ jobs:
       - name: Build SDK
         run: npm run build --workspace=packages/sdk
 
+      - name: Build MCP
+        run: npm run build --workspace=packages/mcp
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
       - name: Typecheck API
         run: npm run typecheck --workspace=packages/api
 
@@ -31,3 +36,47 @@ jobs:
 
       - name: Test API
         run: npm test --workspace=packages/api -- --run
+
+      - name: Test MCP
+        run: npm test --workspace=packages/mcp -- --run
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build SDK
+        run: npm run build --workspace=packages/sdk
+
+      - name: Build MCP
+        run: npm run build --workspace=packages/mcp
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
+
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler deploy --config packages/api/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-landing:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy landing page to Cloudflare Pages
+        run: npx wrangler pages deploy packages/landing --project-name=trustthenverify
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

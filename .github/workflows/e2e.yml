@@ -1,0 +1,35 @@
+name: E2E Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API URL to test against"
+        default: "https://sandbox.trustthenverify.com/v2"
+        required: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build SDK
+        run: npm run build --workspace=packages/sdk
+
+      - name: Install E2E deps
+        run: cd packages/e2e && npm install
+
+      - name: Run E2E smoke tests
+        run: cd packages/e2e && npx vitest --run
+        env:
+          E2E_API_URL: ${{ github.event.inputs.api_url }}
+          E2E_SANDBOX_KEY: ${{ secrets.E2E_SANDBOX_KEY }}

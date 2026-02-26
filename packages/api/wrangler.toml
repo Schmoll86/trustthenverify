@@ -2,6 +2,12 @@ name = "trustthenverify-api"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
+# Custom domain routes — api.* for production, sandbox.* for sandbox mode
+routes = [
+  { pattern = "api.trustthenverify.com/*", zone_name = "trustthenverify.com" },
+  { pattern = "sandbox.trustthenverify.com/*", zone_name = "trustthenverify.com" },
+]
+
 # Async jobs: Argus Codex refinement, oracle dispatch, timeout sweeps
 [[queues.producers]]
 binding = "QUEUE"
@@ -35,3 +41,17 @@ CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"
 # Secrets (set via `wrangler secret put`):
 # ESCROW_FACTORY_ADDRESS — deployed EscrowFactory contract address
 # GATEWAY_EOA_PRIVATE_KEY — secp256k1 key for on-chain gateway signatures
+
+# ─── Staging environment (Base Sepolia testnet) ─────────────────────────────
+[env.staging]
+name = "trustthenverify-api-staging"
+routes = [
+  { pattern = "staging-api.trustthenverify.com/*", zone_name = "trustthenverify.com" },
+]
+
+[env.staging.vars]
+API_VERSION = "v2"
+BASE_RPC_URL = "https://sepolia.base.org"
+BASE_CHAIN_ID = "84532"
+TRANSLATOR_MODEL = "moonshotai/kimi-k2.5"
+CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash"

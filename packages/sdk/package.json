@@ -5,6 +5,23 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./channels": {
+      "import": "./dist/channels.js",
+      "types": "./dist/channels.d.ts"
+    },
+    "./observations": {
+      "import": "./dist/observations.js",
+      "types": "./dist/observations.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
@@ -15,8 +32,19 @@
     "trust",
     "escrow",
     "verification",
-    "trustthenverify"
+    "trustthenverify",
+    "mcp",
+    "autonomous-agents"
   ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Schmoll86/trustthenverify.git",
+    "directory": "packages/sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
     "@noble/secp256k1": "^3.0.0"

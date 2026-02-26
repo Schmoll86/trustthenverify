@@ -8,9 +8,11 @@
     "packages/mcp"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspaces --if-present",
     "dev:api": "npm run dev --workspace=packages/api",
     "dev:sdk": "npm run build:watch --workspace=packages/sdk",
-    "dev:mcp": "npm run dev --workspace=packages/mcp"
+    "dev:mcp": "npm run dev --workspace=packages/mcp",
+    "deploy": "npm run build --workspace=packages/sdk && npm run build --workspace=packages/mcp && wrangler deploy --config packages/api/wrangler.toml",
+    "deploy:staging": "npm run build --workspace=packages/sdk && npm run build --workspace=packages/mcp && wrangler deploy --config packages/api/wrangler.toml --env staging"
   }
 }
