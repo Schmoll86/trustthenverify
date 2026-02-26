@@ -26,6 +26,7 @@ const app = new Hono<AppEnv>()
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/', (c) => c.json({ name: 'TrustThenVerify API', version: '2.0.0', spec: 'SPEC-v2' }))
+app.get('/v2/health', (c) => c.json({ status: 'ok', version: '2.0.0' }))
 
 // ── Auth middleware (applies to all /v2 routes) ──────────────────────────────
 app.use('/v2/*', authMiddleware)
