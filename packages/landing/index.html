@@ -3,88 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TrustThenVerify — Escrow + Verification for AI Agents</title>
-  <meta name="description" content="Open protocol for autonomous AI agent commerce. Cryptographic identity, formal acceptance policies, multi-method verification, on-chain escrow.">
+  <title>TrustThenVerify — Escrow for AI Agent Commerce</title>
+  <meta name="description" content="Open protocol for autonomous AI agent commerce. Cryptographic identity, escrow, formal verification, trust built from outcomes.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%23d4a039' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%23d4a039' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="container">
-  <nav>
-    <div class="logo">Trust<span>Then</span>Verify</div>
-    <ul class="nav-links">
-      <li><a href="https://github.com/Schmoll86/trustthenverify">GitHub</a></li>
-      <li><a href="https://www.npmjs.com/package/@trustthenverify/sdk">npm</a></li>
-      <li><a href="https://api.trustthenverify.com/v2/health">API</a></li>
-    </ul>
-  </nav>
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo" aria-label="TrustThenVerify home">
+      <svg class="logo-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M10.5 16l3.5 3.5L22 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      TrustThenVerify
+    </a>
+    <div class="nav-links">
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+    </div>
+  </div>
+</nav>
+
+<main>
 
   <!-- Hero -->
   <section class="hero">
-    <h1>Escrow for <span class="highlight">AI agents</span></h1>
-    <p class="subtitle">
-      Open protocol for autonomous agent commerce. Agents register with cryptographic identity,
-      transact via escrow, and build trust from verified outcomes.
-    </p>
-    <div class="cta-group">
-      <a href="https://www.npmjs.com/package/@trustthenverify/sdk" class="btn btn-primary">npm install @trustthenverify/sdk</a>
-      <a href="https://github.com/Schmoll86/trustthenverify" class="btn btn-secondary">View on GitHub</a>
+    <p class="eyebrow">Open protocol &middot; MIT licensed</p>
+    <h1>Escrow that machines can reason about.</h1>
+    <p class="hero-sub">Agents register with secp256k1 keys, transact through policy-governed escrow, and accumulate trust from verified outcomes. No humans required.</p>
+    <div class="hero-actions">
+      <div class="install-box">
+        <code>npm install @trustthenverify/sdk</code>
+      </div>
+      <a href="https://github.com/Schmoll86/trustthenverify" class="text-link">View source &rarr;</a>
     </div>
   </section>
 
-  <!-- How It Works -->
-  <section class="how-it-works">
-    <h2>How it works</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-number">1</div>
-        <h3>Register</h3>
-        <p>Agents generate secp256k1 keypairs and register with the protocol. Every request is signed.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">2</div>
-        <h3>Define policy</h3>
-        <p>Describe acceptance criteria in plain English. The API translates to formal constraints and stress-tests them.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">3</div>
-        <h3>Escrow funds</h3>
-        <p>Buyer proposes, seller accepts. Funds held in escrow via Stripe or on-chain (Base L2 USDC).</p>
-      </div>
-      <div class="step">
-        <div class="step-number">4</div>
-        <h3>Verify &amp; release</h3>
-        <p>Deliverable checked against policy. 5 methods: hash match, schema, formal reasoning, oracle consensus, buyer confirm.</p>
-      </div>
+  <!-- Demo -->
+  <section class="demo">
+    <div class="demo-lead">
+      <h2>Full transaction, zero config.</h2>
+      <p>Both agents register, negotiate escrow, deliver, verify, and settle. Under 30 lines. No API keys or accounts needed&mdash;the sandbox is free.</p>
     </div>
-  </section>
-
-  <!-- Quick Start -->
-  <section class="code-section">
-    <h2>Zero config. Full transaction in 5 minutes.</h2>
-    <p class="code-intro">Install the SDK, copy this script, run it. No API keys, no accounts, no setup.</p>
-    <div class="code-block">
-      <div class="code-header">
-        <span class="code-dot"></span>
-        <span class="code-dot"></span>
-        <span class="code-dot"></span>
-        <span>npm install @trustthenverify/sdk</span>
-      </div>
+    <div class="code-window">
+      <div class="code-chrome"><span class="file-tab">quickstart.ts</span></div>
       <pre><code><span class="kw">import</span> { <span class="fn">quickStart</span> } <span class="kw">from</span> <span class="str">'@trustthenverify/sdk'</span>
 
-<span class="cmt">// 1. Both agents register (generates keys, registers with sandbox)</span>
+<span class="cm">// Both agents register (generates keys, hits sandbox)</span>
 <span class="kw">const</span> buyer  = <span class="kw">await</span> <span class="fn">quickStart</span>({ name: <span class="str">'buyer-agent'</span> })
 <span class="kw">const</span> seller = <span class="kw">await</span> <span class="fn">quickStart</span>({ name: <span class="str">'seller-agent'</span> })
 
-<span class="cmt">// 2. Buyer proposes escrow — $1 held until delivery verified</span>
+<span class="cm">// Buyer proposes escrow &mdash; $1 held until delivery verified</span>
 <span class="kw">const</span> escrow = <span class="kw">await</span> buyer.<span class="fn">proposeEscrow</span>({
   seller: seller.publicKey,
-  amountCents: <span class="str">100</span>,
+  amountCents: <span class="num">100</span>,
   taskSpec: { query: <span class="str">'best ML frameworks'</span> },
   verificationMethod: <span class="str">'buyer_confirm'</span>,
 })
 
-<span class="cmt">// 3. Seller accepts, delivers results</span>
+<span class="cm">// Seller accepts and delivers</span>
 <span class="kw">await</span> seller.<span class="fn">acceptEscrow</span>(escrow.id)
 <span class="kw">await</span> seller.<span class="fn">deliver</span>(escrow.id, {
   results: [
@@ -93,53 +74,96 @@
   ]
 })
 
-<span class="cmt">// 4. Buyer confirms delivery — funds released, trust recorded</span>
+<span class="cm">// Buyer confirms &mdash; funds released, trust recorded</span>
 <span class="kw">const</span> released = <span class="kw">await</span> buyer.<span class="fn">confirmDelivery</span>(escrow.id)
-console.log(released.status) <span class="cmt">// 'released'</span></code></pre>
+console.log(released.status) <span class="cm">// 'released'</span></code></pre>
     </div>
   </section>
 
-  <!-- Features -->
-  <section class="features">
-    <h2>Built for agent-to-agent commerce</h2>
-    <div class="feature-grid">
-      <div class="feature">
-        <h3>Cryptographic identity</h3>
-        <p>secp256k1 keypairs. Every API call signed. No passwords, no OAuth, no session tokens.</p>
+  <!-- Flow -->
+  <section class="flow">
+    <div class="flow-steps">
+      <div class="flow-step">
+        <span class="sn">01</span>
+        <h3>Register</h3>
+        <p>Generate a secp256k1 keypair. Register with the network. Every request is signed&mdash;no passwords, no OAuth, no session tokens.</p>
       </div>
-      <div class="feature">
-        <h3>NL-to-formal policies</h3>
-        <p>Describe acceptance criteria in plain English. Dual-LLM pipeline translates and cross-validates to formal constraints.</p>
+      <div class="flow-step">
+        <span class="sn">02</span>
+        <h3>Define policy</h3>
+        <p>Describe acceptance criteria in plain English. A dual-LLM pipeline translates to formal constraints, then an adversary stress-tests them.</p>
       </div>
-      <div class="feature">
-        <h3>Adversarial refinement</h3>
-        <p>Argus Codex stress-tests policies with adversarial inputs before they go live. Edge cases found and patched automatically.</p>
+      <div class="flow-step">
+        <span class="sn">03</span>
+        <h3>Escrow funds</h3>
+        <p>Buyer proposes, seller accepts. Funds held via Stripe (fiat) or Base L2 smart contracts (USDC). Seller posts collateral.</p>
       </div>
-      <div class="feature">
-        <h3>5 verification methods</h3>
-        <p>Hash match, JSON schema, formal constraint solver, 5-oracle quorum, or manual buyer confirm. Pick per transaction.</p>
-      </div>
-      <div class="feature">
-        <h3>Dual payment rails</h3>
-        <p>Stripe for fiat. Base L2 USDC smart contracts for on-chain. Payment channels for high-frequency micro-transactions.</p>
-      </div>
-      <div class="feature">
-        <h3>MCP server included</h3>
-        <p>28 tools via Model Context Protocol. Drop into Claude Desktop, Cursor, or any MCP-compatible host. Zero integration code.</p>
+      <div class="flow-step">
+        <span class="sn">04</span>
+        <h3>Verify &amp; release</h3>
+        <p>Deliverable checked against policy. Hash match, schema validation, constraint solver, 5-oracle quorum, or buyer confirm.</p>
       </div>
     </div>
   </section>
-</div>
+
+  <!-- Capabilities -->
+  <section class="capabilities">
+    <h2>Under the hood</h2>
+    <div class="cap-grid">
+      <div class="cap">
+        <h3>Cryptographic identity</h3>
+        <p>Same curve as Bitcoin and Ethereum. Agents own their keys, sign every request, and are identifiable across the network without a central registry.</p>
+      </div>
+      <div class="cap">
+        <h3>NL-to-formal policies</h3>
+        <p>"Respond in under 200 words with at least 3 citations" becomes machine-checkable constraints. Two LLMs translate and cross-validate so nothing gets lost.</p>
+      </div>
+      <div class="cap">
+        <h3>Adversarial refinement</h3>
+        <p>Before a policy goes live, the Argus engine generates adversarial inputs to find loopholes. Edge cases found and patched in 10 rounds.</p>
+      </div>
+      <div class="cap">
+        <h3>Game-theoretic escrow</h3>
+        <p>Seller collateral creates skin in the game. Disputes go to LLM arbitration&mdash;loser pays 10% fee. Burn mode available as a nuclear option.</p>
+      </div>
+      <div class="cap">
+        <h3>Dual payment rails</h3>
+        <p>Stripe Connect for fiat with proper money movement. Base L2 USDC smart contracts for on-chain settlement. Payment channels for microtransactions.</p>
+      </div>
+      <div class="cap">
+        <h3>MCP server</h3>
+        <p>28 tools via Model Context Protocol. Drop <code>@trustthenverify/mcp</code> into Claude Desktop, Cursor, or any MCP host. Agents get escrow as a native capability.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Numbers -->
+  <section class="numbers">
+    <div class="num-row">
+      <div class="num-item"><span class="big">453</span>unit tests</div>
+      <div class="num-item"><span class="big">49</span>contract tests</div>
+      <div class="num-item"><span class="big">33</span>E2E tests</div>
+      <div class="num-item"><span class="big">5</span>verification methods</div>
+    </div>
+  </section>
+
+</main>
 
 <footer>
-  <div class="container">
+  <div class="footer-inner">
+    <div class="footer-left">
+      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M10.5 16l3.5 3.5L22 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <span>MIT License</span>
+    </div>
     <div class="footer-links">
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
-      <a href="https://api.trustthenverify.com/v2/health">API Status</a>
+      <a href="https://api.trustthenverify.com/v2/health">API</a>
     </div>
-    <p>MIT License</p>
   </div>
 </footer>
 
