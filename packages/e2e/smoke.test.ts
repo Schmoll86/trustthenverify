@@ -16,6 +16,7 @@ describe('E2E smoke test — happy path', { timeout: 30_000 }, () => {
   let sellerProto: TrustProtocol
   let escrowId: string
   let policyId: string
+  let sellerId: string
 
   it('registers buyer agent', async () => {
     const agent = await createAgent({
@@ -49,6 +50,7 @@ describe('E2E smoke test — happy path', { timeout: 30_000 }, () => {
       sandboxKey: SANDBOX_KEY,
     })
     expect(agent.publicKey).toBe(seller.publicKey)
+    sellerId = agent.id
 
     sellerProto = new TrustProtocol({
       publicKey: seller.publicKey,
@@ -109,7 +111,7 @@ describe('E2E smoke test — happy path', { timeout: 30_000 }, () => {
 
   it('publishes attestation without error', async () => {
     const attestation = await buyerProto.publishAttestation({
-      subjectId: seller.publicKey,
+      subjectId: sellerId,
       escrowId,
       outcome: 'success',
       verificationMethod: 'buyer_confirm',

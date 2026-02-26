@@ -1,7 +1,7 @@
 -- Seed: Pre-built policy templates (SPEC-v2 §10.3)
 -- These are platform-provided, Argus-refined templates for common task types.
 
-INSERT INTO policies (name, description, intent, formal_spec, version, status, tier2_used, argus_budget, argus_coverage) VALUES
+INSERT INTO policies (name, description, intent, formal_spec, version, status, billing, tier2_used, argus_budget, argus_coverage) VALUES
 (
   'web_search_v1',
   'Pre-built template for search result verification',
@@ -15,7 +15,7 @@ INSERT INTO policies (name, description, intent, formal_spec, version, status, t
     ],
     "version": "1.0"
   }'::jsonb,
-  1, 'active', false, 1000, 0.95
+  1, 'active', 'platform', false, 1000, 0.95
 ),
 (
   'summarization_v1',
@@ -30,7 +30,7 @@ INSERT INTO policies (name, description, intent, formal_spec, version, status, t
     ],
     "version": "1.0"
   }'::jsonb,
-  1, 'active', true, 1000, 0.92
+  1, 'active', 'platform', true, 1000, 0.92
 ),
 (
   'data_retrieval_v1',
@@ -45,7 +45,7 @@ INSERT INTO policies (name, description, intent, formal_spec, version, status, t
     ],
     "version": "1.0"
   }'::jsonb,
-  1, 'active', false, 1000, 0.98
+  1, 'active', 'platform', false, 1000, 0.98
 ),
 (
   'code_execution_v1',
@@ -60,7 +60,7 @@ INSERT INTO policies (name, description, intent, formal_spec, version, status, t
     ],
     "version": "1.0"
   }'::jsonb,
-  1, 'active', false, 1000, 0.97
+  1, 'active', 'platform', false, 1000, 0.97
 ),
 (
   'translation_v1',
@@ -75,6 +75,6 @@ INSERT INTO policies (name, description, intent, formal_spec, version, status, t
     ],
     "version": "1.0"
   }'::jsonb,
-  1, 'active', true, 1000, 0.90
+  1, 'active', 'platform', true, 1000, 0.90
 )
 ON CONFLICT DO NOTHING;

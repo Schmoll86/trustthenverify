@@ -259,12 +259,20 @@ escrow.post('/:id/accept', async (c) => {
   }
 
   // Stripe mode: proposed → active (atomic accept + fund)
-  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-  const { stripeEscrowId } = await stripe.captureEscrowFunds({
-    buyerAmountCents: escrowRow.amount_cents,
-    sellerCollateralCents: escrowRow.seller_collateral,
-    escrowId,
-  })
+  let stripeEscrowId: string
+
+  if (c.get('sandboxMode')) {
+    // Sandbox: skip real Stripe calls
+    stripeEscrowId = 'sandbox_mock'
+  } else {
+    const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+    const result = await stripe.captureEscrowFunds({
+      buyerAmountCents: escrowRow.amount_cents,
+      sellerCollateralCents: escrowRow.seller_collateral,
+      escrowId,
+    })
+    stripeEscrowId = result.stripeEscrowId
+  }
 
   const timeoutSeconds = (row as Record<string, unknown>).timeout_seconds as number | undefined ?? 3600
   const newExpiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString()
@@ -582,8 +590,10 @@ escrow.post('/:id/confirm', async (c) => {
     return error(c, 400, 'INVALID_PARAMS', 'Manual confirmation only available for buyer_confirm verification method')
   }
 
-  // Release funds — branch by funding mode
-  if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+  // Release funds — branch by funding mode (skip in sandbox)
+  if (c.get('sandboxMode')) {
+    // Sandbox: skip real payment calls
+  } else if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
     // On-chain: buyer confirms directly on contract (this API call just records the verification)
     // The actual fund transfer happens on-chain via confirmDelivery()
     // We record it here and update our DB state

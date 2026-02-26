@@ -442,6 +442,7 @@ export class TrustProtocol {
         ?? (typeof process !== 'undefined' ? process.env?.TRUSTTHENVERIFY_SANDBOX_KEY : undefined)
       return {
         'X-Sandbox-Key': key ?? '',
+        'X-Agent-Pubkey': this.publicKey,
         'Content-Type': 'application/json',
       }
     }

@@ -39,15 +39,44 @@ export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     const validKeys = (c.env.SANDBOX_KEYS || '').split(',').map((k) => k.trim()).filter(Boolean)
     if (validKeys.length === 0 || validKeys.includes(sandboxKey)) {
       c.set('sandboxMode', true)
-      // In sandbox mode, use pubkey from body if present (for registration)
-      try {
-        const parsed = JSON.parse(rawBody)
-        if (parsed.publicKey) {
-          c.set('agentPubkey', parsed.publicKey)
+
+      // In sandbox mode, identify agent via X-Agent-Pubkey header or body.publicKey
+      const sandboxPubkey = c.req.header('X-Agent-Pubkey')
+      if (sandboxPubkey) {
+        c.set('agentPubkey', sandboxPubkey)
+      } else {
+        try {
+          const parsed = JSON.parse(rawBody)
+          if (parsed.publicKey) {
+            c.set('agentPubkey', parsed.publicKey)
+          }
+        } catch {
+          // non-JSON body is fine for some endpoints
         }
-      } catch {
-        // non-JSON body is fine for some endpoints
       }
+
+      // Skip DB lookup for agent registration (agent doesn't exist yet)
+      const routePath = new URL(c.req.url).pathname
+      if (c.req.method === 'POST' && routePath === '/v2/agents') {
+        return next()
+      }
+
+      // Look up agentId from pubkey (same as ECDSA path)
+      const pubkeyForLookup = c.get('agentPubkey')
+      if (pubkeyForLookup) {
+        const { createDb } = await import('../lib/db')
+        const db = createDb(c.env)
+        const { data: agent } = await db
+          .from('agents')
+          .select('id')
+          .eq('public_key', pubkeyForLookup)
+          .single()
+
+        if (agent) {
+          c.set('agentId', agent.id)
+        }
+      }
+
       return next()
     }
     return error(c, 401, 'SIGNATURE_INVALID', 'Invalid sandbox key')
