@@ -248,15 +248,18 @@ export class RealOnchainService implements OnchainService {
       gasLimit = 1_000_000n
     }
 
-    // 3. Get base fee and compute EIP-1559 gas prices
-    const maxPriorityFeePerGas = 1_500_000_000n // 1.5 gwei
+    // 3. Get base fee and compute EIP-1559 gas prices (L2-optimized)
+    let maxPriorityFeePerGas: bigint
     let maxFeePerGas: bigint
     try {
       const gasPriceHex = await this.rpcCall('eth_gasPrice', []) as string
       const basePrice = BigInt(gasPriceHex)
-      maxFeePerGas = basePrice * 2n + maxPriorityFeePerGas
+      // On L2s (Base), base fee is sub-gwei. Use small tip + 3x headroom.
+      maxPriorityFeePerGas = basePrice < 1_000_000_000n ? 1_000n : 1_500_000_000n
+      maxFeePerGas = basePrice * 3n + maxPriorityFeePerGas
     } catch {
-      maxFeePerGas = 10_000_000_000n // 10 gwei fallback
+      maxPriorityFeePerGas = 1_000n
+      maxFeePerGas = 100_000_000n // 0.1 gwei fallback for L2
     }
 
     // 4. Build EIP-1559 tx fields

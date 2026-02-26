@@ -1,30 +1,47 @@
 ```mermaid
 graph TD
-    SDK["Client SDK<br/>secp256k1 signing"] --> API["Cloudflare Workers + Hono<br/>API + Verification Gateway"]
-    MCP["MCP Server"] --> SDK
+    SDK["Client SDK<br/>secp256k1 signing<br/>trust model"] --> API["Cloudflare Workers + Hono<br/>API + Verification Gateway"]
+    MCP["MCP Server<br/>AI agent tool integration"] --> SDK
 
-    API --> DB["Supabase PostgreSQL<br/>Agents, Policies, Escrows"]
-    API --> QUEUE["Cloudflare Queues<br/>Argus Codex, Timeouts"]
+    API --> DB["Supabase PostgreSQL<br/>Agents, Policies, Escrows<br/>Channels, Attestations"]
+    API --> QUEUE["Cloudflare Queues<br/>Argus Codex, Oracle, Timeouts"]
+    API --> KV["Cloudflare KV<br/>Rate Limiting<br/>60 writes / 300 reads per min"]
     API --> WAI["Workers AI<br/>Tier 2 Semantic Verification"]
 
-    API --> |"Stripe mode"| STRIPE["Stripe Connect<br/>Training Wheels Escrow"]
-    API --> |"On-chain mode Phase 4"| BASE["Base L2 Smart Contracts<br/>USDC Escrow"]
+    API --> |"Stripe mode<br/>(default)"| STRIPE["Stripe Connect<br/>Dual-PI Escrow<br/>Express accounts"]
+    API --> |"On-chain mode"| BASE["Base Sepolia L2<br/>EscrowFactory + PaymentChannel<br/>USDC settlement"]
 
-    API --> VERIFY["AR Constraint Solver<br/>Tier 1 Deterministic under 100ms<br/>Tier 2 Semantic under 5s"]
+    API --> VERIFY["Constraint Solver<br/>Tier 1: 15 deterministic types, under 1ms<br/>Tier 2: 3 semantic types, under 50ms"]
 
-    QUEUE --> ARGUS["Argus Codex<br/>Adversarial Policy Refinement"]
-    SDK --> |"publish attestations"| NOSTR["Nostr Relays<br/>Peer-to-Peer Observations"]
-    SDK --> |"local observations"| LOCAL["Local Trust Store<br/>suggestCollateral"]
+    API --> OPENROUTER["OpenRouter<br/>NL Translation + Arbitration"]
+
+    OPENROUTER --> |"translate"| GEMINI_FLASH["Gemini 2.5 Flash<br/>Policy translator"]
+    OPENROUTER --> |"cross-validate"| GEMINI_LITE["Gemini 2.5 Flash Lite<br/>Cross-validator"]
+    OPENROUTER --> |"arbitrate"| LLM_JUDGE["LLM Judge<br/>Dispute resolution"]
+
+    QUEUE --> ARGUS["Argus Codex<br/>Adversarial Policy Refinement<br/>10 rounds, auto-approve ≥0.9"]
+    QUEUE --> ORACLE["Oracle Consensus<br/>5 oracles, quorum 3<br/>30min timeout"]
+
+    SDK --> |"publish attestations"| NOSTR["Nostr Relays<br/>NIP-78 Observations"]
+    SDK --> |"local trust"| LOCAL["Local Trust Store<br/>suggestCollateral()"]
+
+    BASE --> FACTORY["EscrowFactory<br/>CREATE2 deterministic"]
+    BASE --> ESCROW_INST["EscrowInstance<br/>8 states, gateway-signed release"]
+    BASE --> CHANNEL["PaymentChannel<br/>Unidirectional USDC"]
 
     classDef core fill:#e8f4fd,stroke:#2196F3;
     classDef storage fill:#e0ffe0,stroke:#228B22;
     classDef settlement fill:#fff3e0,stroke:#FF9800;
     classDef verification fill:#fce4ec,stroke:#E91E63;
     classDef p2p fill:#f3e5f5,stroke:#9C27B0;
+    classDef llm fill:#fff9c4,stroke:#F9A825;
+    classDef contracts fill:#ffe0b2,stroke:#E65100;
 
     class API,SDK,MCP core
-    class DB,QUEUE storage
+    class DB,QUEUE,KV storage
     class STRIPE,BASE settlement
-    class VERIFY,WAI,ARGUS verification
+    class VERIFY,WAI,ARGUS,ORACLE verification
     class NOSTR,LOCAL p2p
+    class OPENROUTER,GEMINI_FLASH,GEMINI_LITE,LLM_JUDGE llm
+    class FACTORY,ESCROW_INST,CHANNEL contracts
 ```

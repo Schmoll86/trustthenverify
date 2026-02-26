@@ -15,13 +15,11 @@ const BUCKET_TTL = 120 // seconds — covers current + previous minute
 export async function rateLimitMiddleware(c: Context, next: Next) {
   const agentId = c.get('agentId') as string | undefined
   if (!agentId) {
-    // Unauthenticated (e.g. GET /escrow/:id) — skip
     return next()
   }
 
   const kv = c.env.RATE_LIMIT_KV as KVNamespace | undefined
   if (!kv) {
-    // KV not bound (dev/test without KV) — skip
     return next()
   }
 
@@ -51,8 +49,11 @@ export async function rateLimitMiddleware(c: Context, next: Next) {
 
   await kv.put(key, String(current + 1), { expirationTtl: BUCKET_TTL })
 
-  c.header('X-RateLimit-Limit', String(limit))
-  c.header('X-RateLimit-Remaining', String(limit - current - 1))
+  await next()
 
-  return next()
+  // Hono v4: replace response with new one that includes rate limit headers
+  const res = new Response(c.res.body, c.res)
+  res.headers.set('X-RateLimit-Limit', String(limit))
+  res.headers.set('X-RateLimit-Remaining', String(limit - current - 1))
+  c.res = res
 }

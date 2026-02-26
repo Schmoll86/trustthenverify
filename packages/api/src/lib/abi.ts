@@ -14,11 +14,13 @@ export function encodeAddress(addr: string): string {
   return clean.toLowerCase().padStart(64, '0')
 }
 
-/** Encode a bytes32 as 32-byte hex (no padding needed). */
+/** Encode a bytes32 as 32-byte hex. Handles hex strings and UUIDs. */
 export function encodeBytes32(value: string): string {
   const clean = value.startsWith('0x') ? value.slice(2) : value
-  if (clean.length !== 64) throw new Error(`Invalid bytes32 length: ${clean.length}`)
-  return clean
+  // Handle UUIDs: strip hyphens and right-pad to 64 hex chars
+  const hex = clean.replace(/-/g, '')
+  if (hex.length > 64) throw new Error(`Invalid bytes32 length: ${hex.length}`)
+  return hex.padEnd(64, '0')
 }
 
 /** Encode a bool as 32-byte hex. */

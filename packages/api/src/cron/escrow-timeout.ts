@@ -220,7 +220,7 @@ function createOnchainService(env: Env): OnchainService {
   return new RealOnchainService(
     env.BASE_RPC_URL ?? 'https://mainnet.base.org',
     env.ESCROW_FACTORY_ADDRESS ?? '',
-    env.GATEWAY_EOA_PRIVATE_KEY ?? '',
+    env.GATEWAY_EOA_PRIVATE_KEY ?? env.GATEWAY_PRIVATE_KEY ?? '',
     parseInt(env.BASE_CHAIN_ID ?? '8453', 10),
   )
 }

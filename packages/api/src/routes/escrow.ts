@@ -58,7 +58,7 @@ function getOnchain(c: { env: Env; get(key: 'onchain'): OnchainService | undefin
   return new RealOnchainService(
     c.env.BASE_RPC_URL ?? 'https://mainnet.base.org',
     c.env.ESCROW_FACTORY_ADDRESS ?? '',
-    c.env.GATEWAY_EOA_PRIVATE_KEY ?? '',
+    c.env.GATEWAY_EOA_PRIVATE_KEY ?? c.env.GATEWAY_PRIVATE_KEY ?? '',
     parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10),
   )
 }
@@ -246,16 +246,22 @@ escrow.post('/:id/accept', async (c) => {
       // On-chain mode: proposed → accepted, deploy contract
       const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
 
-      const deployed = await onchain.deployEscrow({
-        escrowId: escrowRow.id,
-        buyer: (escrowRow as unknown as Record<string, unknown>).buyer_address as string,
-        seller: (escrowRow as unknown as Record<string, unknown>).seller_address as string,
-        amountUsdc: BigInt(escrowRow.amount_cents) * 10000n, // cents → 6 decimal USDC
-        collateralUsdc: BigInt(escrowRow.seller_collateral) * 10000n,
-        deadlineTimestamp: Math.floor(Date.now() / 1000) + (escrowRow.timeout_seconds ?? 3600),
-      })
-      contractAddress = deployed.contractAddress
-      txHash = deployed.txHash
+      try {
+        const deployed = await onchain.deployEscrow({
+          escrowId: escrowRow.id,
+          buyer: (escrowRow as unknown as Record<string, unknown>).buyer_address as string,
+          seller: (escrowRow as unknown as Record<string, unknown>).seller_address as string,
+          amountUsdc: BigInt(escrowRow.amount_cents) * 10000n, // cents → 6 decimal USDC
+          collateralUsdc: BigInt(escrowRow.seller_collateral) * 10000n,
+          deadlineTimestamp: Math.floor(Date.now() / 1000) + (escrowRow.timeout_seconds ?? 3600),
+        })
+        contractAddress = deployed.contractAddress
+        txHash = deployed.txHash
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error('On-chain deploy failed:', msg)
+        return error(c, 500, 'ONCHAIN_DEPLOY_FAILED', msg)
+      }
     }
 
     // Funding window: 30 min for agents to fund the contract

@@ -143,6 +143,8 @@ describe('E2E on-chain escrow — Base Sepolia', { timeout: 120_000 }, () => {
 describe('E2E payment channels', { timeout: 60_000 }, () => {
   const buyer = generateKeypair()
   const seller = generateKeypair()
+  // Unique address per run to avoid 409 conflicts from prior runs
+  const channelAddr = '0x' + crypto.randomUUID().replace(/-/g, '').slice(0, 40)
 
   let buyerProto: TrustProtocol
   let sellerProto: TrustProtocol
@@ -185,35 +187,35 @@ describe('E2E payment channels', { timeout: 60_000 }, () => {
 
   it('registers a payment channel', async () => {
     const channel = await buyerProto.registerChannel({
-      channelAddress: '0x' + 'ab'.repeat(20),
+      channelAddress: channelAddr,
       counterparty: seller.publicKey,
       depositAmount: 1000,
       chainId: 84532,
       expiryAt: '2026-12-31T23:59:59Z',
     })
 
-    expect(channel.channelAddress).toBe('0x' + 'ab'.repeat(20))
+    expect(channel.channelAddress).toBe(channelAddr)
     expect(channel.status).toBe('open')
   })
 
   it('reads channel details', async () => {
-    const channel = await buyerProto.getChannel('0x' + 'ab'.repeat(20))
+    const channel = await buyerProto.getChannel(channelAddr)
     expect(channel.depositAmount).toBe(1000)
   })
 
   it('seller can also read channel', async () => {
-    const channel = await sellerProto.getChannel('0x' + 'ab'.repeat(20))
+    const channel = await sellerProto.getChannel(channelAddr)
     expect(channel.status).toBe('open')
   })
 
   it('closes channel', async () => {
-    const channel = await buyerProto.closeChannel('0x' + 'ab'.repeat(20))
+    const channel = await buyerProto.closeChannel(channelAddr)
     expect(channel.status).toBe('closed')
   })
 
   it('double close returns error', async () => {
     await expect(
-      buyerProto.closeChannel('0x' + 'ab'.repeat(20))
+      buyerProto.closeChannel(channelAddr)
     ).rejects.toThrow()
   })
 })
