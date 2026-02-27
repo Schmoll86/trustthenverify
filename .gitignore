@@ -1,6 +1,7 @@
 .dev.vars
-node_modules/
-dist/
-.wrangler/
 .DS_Store
 .mcp.json
+.wrangler/
+dist/
+node_modules/
+packages/contracts/.env

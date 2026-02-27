@@ -39,15 +39,15 @@ id = "29c97513f8c640b889a52ce0111f5d84"
 [vars]
 API_VERSION = "v2"
 ARBITRATION_MODEL = "google/gemini-2.5-flash"
-BASE_RPC_URL = "https://sepolia.base.org"
-BASE_CHAIN_ID = "84532"
+BASE_RPC_URL = "https://base-mainnet.g.alchemy.com/v2/pSqXLT1kg-6HQ7rE7Gu9W"
+BASE_CHAIN_ID = "8453"
 ESCROW_FACTORY_ADDRESS = "0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e"
+USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 TRANSLATOR_MODEL = "google/gemini-2.5-flash"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
 
 # Secrets (set via `wrangler secret put`):
-# ESCROW_FACTORY_ADDRESS — deployed EscrowFactory contract address
-# GATEWAY_EOA_PRIVATE_KEY — secp256k1 key for on-chain gateway signatures
+# GATEWAY_EOA_PRIVATE_KEY — secp256k1 key for on-chain gateway signatures (falls back to GATEWAY_PRIVATE_KEY)
 
 # ─── Staging environment (Base Sepolia testnet) ─────────────────────────────
 [env.staging]
@@ -61,5 +61,6 @@ API_VERSION = "v2"
 BASE_RPC_URL = "https://sepolia.base.org"
 BASE_CHAIN_ID = "84532"
 ESCROW_FACTORY_ADDRESS = "0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e"
+USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 TRANSLATOR_MODEL = "google/gemini-2.5-flash"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
