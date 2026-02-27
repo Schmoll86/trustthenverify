@@ -383,6 +383,48 @@ agents.get('/:pubkey/stripe/status', async (c) => {
   })
 })
 
+// POST /agents/:pubkey/stripe/setup-intent — create SetupIntent for card collection
+agents.post('/:pubkey/stripe/setup-intent', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only create setup intents for your own agent')
+  }
+
+  const db = createDb(c.env)
+  const { data: agent } = await db
+    .from('agents')
+    .select('*')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const row = agent as AgentRow
+  if (!row.stripe_customer_id) {
+    return error(c, 400, 'INVALID_PARAMS', 'Agent must have a Stripe Customer first. Call POST /agents/:pubkey/stripe/customer')
+  }
+
+  // Sandbox mode: return mock values
+  if (c.get('sandboxMode')) {
+    return success(c, {
+      setupIntentId: 'seti_mock_sandbox',
+      clientSecret: 'seti_mock_sandbox_secret_test',
+    })
+  }
+
+  const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
+  const result = await stripe.createSetupIntent({
+    customerId: row.stripe_customer_id,
+    metadata: { agent_id: row.id, platform: 'trustthenverify' },
+  })
+
+  return success(c, result)
+})
+
 // POST /agents/:pubkey/stripe/payment-method — attach payment method to Customer
 agents.post('/:pubkey/stripe/payment-method', async (c) => {
   const pubkey = c.req.param('pubkey')

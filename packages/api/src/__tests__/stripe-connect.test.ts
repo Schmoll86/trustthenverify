@@ -16,6 +16,7 @@ vi.mock('../lib/stripe', () => ({
     createCustomer = mockStripe.createCustomer
     createConnectAccount = mockStripe.createConnectAccount
     getAccountStatus = mockStripe.getAccountStatus
+    createSetupIntent = mockStripe.createSetupIntent
     attachPaymentMethod = mockStripe.attachPaymentMethod
     captureEscrowFunds = mockStripe.captureEscrowFunds
     releaseFunds = mockStripe.releaseFunds
@@ -188,6 +189,59 @@ describe('GET /v2/agents/:pubkey/stripe/status', () => {
     const json = await res.json() as { data: { hasCustomer: boolean; hasConnectAccount: boolean } }
     expect(json.data.hasCustomer).toBe(false)
     expect(json.data.hasConnectAccount).toBe(false)
+  })
+})
+
+describe('POST /v2/agents/:pubkey/stripe/setup-intent', () => {
+  let kp: ReturnType<typeof generateKeypair>
+
+  beforeEach(() => {
+    mockDb = createMockDb()
+    mockStripe.reset()
+    kp = generateKeypair()
+  })
+
+  it('creates SetupIntent for agent with customer', async () => {
+    seedAgent(kp, { stripe_customer_id: 'cus_test' })
+
+    const res = await makeSignedRequest('POST', `/v2/agents/${kp.publicKey}/stripe/setup-intent`, '{}', kp)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: { setupIntentId: string; clientSecret: string } }
+    expect(json.data.setupIntentId).toBeTruthy()
+    expect(json.data.clientSecret).toBeTruthy()
+    expect(mockStripe.calls).toHaveLength(1)
+    expect(mockStripe.calls[0].method).toBe('createSetupIntent')
+  })
+
+  it('rejects if no customer exists', async () => {
+    seedAgent(kp)
+
+    const res = await makeSignedRequest('POST', `/v2/agents/${kp.publicKey}/stripe/setup-intent`, '{}', kp)
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects if different agent', async () => {
+    seedAgent(kp, { stripe_customer_id: 'cus_test' })
+    const other = generateKeypair()
+    mockDb.getTable('agents').rows.push({
+      id: 'other-id',
+      public_key: other.publicKey,
+      endpoint: null,
+      name: 'other',
+      capabilities: [],
+      metadata: {},
+      parent_id: null,
+      created_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+      stripe_customer_id: null,
+      stripe_connected_account_id: null,
+      stripe_onboarding_complete: false,
+      stripe_default_payment_method: null,
+    })
+
+    const res = await makeSignedRequest('POST', `/v2/agents/${kp.publicKey}/stripe/setup-intent`, '{}', other)
+    expect(res.status).toBe(403)
   })
 })
 

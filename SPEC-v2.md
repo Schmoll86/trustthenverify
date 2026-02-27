@@ -1104,9 +1104,11 @@ This is NOT trustless — agents trust TTV with funds. But it eliminates the cry
 
 Agents establish Stripe identity before transacting:
 
-- **Buyers** create a Stripe Customer (`POST /agents/:pubkey/stripe/customer`), then attach a PaymentMethod (`POST /agents/:pubkey/stripe/payment-method`).
+- **Buyers** create a Stripe Customer (`POST /agents/:pubkey/stripe/customer`), create a SetupIntent for zero-friction card collection (`POST /agents/:pubkey/stripe/setup-intent`), then attach the resulting PaymentMethod (`POST /agents/:pubkey/stripe/payment-method`).
 - **Sellers** create a Stripe Express Connected Account (`POST /agents/:pubkey/stripe/connect`), completing Stripe's hosted onboarding flow.
 - **Status** can be checked via `GET /agents/:pubkey/stripe/status`.
+
+The SetupIntent flow enables Stripe Elements integration: the API returns a `clientSecret`, the frontend mounts a card form via `stripe.confirmCardSetup(clientSecret)`, and the resulting PaymentMethod ID is attached to the agent. This eliminates the need for buyers to manually copy PaymentMethod IDs from the Stripe Dashboard.
 
 Agent table fields: `stripe_customer_id`, `stripe_connected_account_id`, `stripe_onboarding_complete`, `stripe_default_payment_method`.
 
@@ -1170,6 +1172,7 @@ POST   /agents/:pubkey/spawn           — spawn child agent (see below)
 
 # Stripe Onboarding (§8.2.1)
 POST   /agents/:pubkey/stripe/customer        — create Stripe Customer (buyer)
+POST   /agents/:pubkey/stripe/setup-intent    — create SetupIntent for card collection (returns clientSecret)
 POST   /agents/:pubkey/stripe/connect         — create Express Connected Account (seller)
 POST   /agents/:pubkey/stripe/payment-method  — attach PaymentMethod to Customer
 GET    /agents/:pubkey/stripe/status           — check onboarding completion
@@ -1456,55 +1459,62 @@ protocol.recordObservation(counterpartyPubkey, { outcome: 'success' });
 
 ### 10.5 MCP Tools
 
-```typescript
-export const MCP_TOOLS = [
-  // ── Discovery ──
-  {
-    name: 'trust_search_agents',
-    description: 'Search for agents by capabilities. Use to discover counterparties.',
-  },
-  // ── Pre-transaction ──
-  {
-    name: 'trust_verify_agent',
-    description: 'Verify an agent controls the identity it claims. Call before any interaction.',
-  },
-  {
-    name: 'trust_suggest_collateral',
-    description: 'Get a suggested collateral ratio based on counterparty history and attestations.',
-  },
-  // ── Transaction lifecycle ──
-  {
-    name: 'trust_propose_escrow',
-    description: 'Propose a transaction with escrow protection and formal acceptance criteria. '
-      + 'Both parties deposit collateral. Deliverables are verified automatically against '
-      + 'the acceptance policy — no manual confirmation needed for most tasks.',
-  },
-  {
-    name: 'trust_escrow_status',
-    description: 'Check current status of an escrow. Poll to see if counterparty accepted, '
-      + 'delivered, or if verification completed.',
-  },
-  {
-    name: 'trust_deliver',
-    description: 'Submit a deliverable for an escrow. The Verification Gateway checks it '
-      + 'against the formal acceptance policy. If it passes, escrow releases automatically. '
-      + 'If it fails, escrow refunds the buyer.',
-  },
-  {
-    name: 'trust_dispute',
-    description: 'Dispute a transaction. Warning: in burn mode, disputing costs you your '
-      + 'deposit too. Only dispute if accepting the deliverable is worse than losing your deposit.',
-  },
-  // ── Policy authoring ──
-  {
-    name: 'trust_create_policy',
-    description: 'Create formal acceptance criteria from a natural language description. '
-      + 'Use when defining a new task type. Optionally refine with adversarial testing.',
-  },
-];
+```
+# Discovery
+trust_search_agents          — Search for agents by capabilities
+trust_verify_agent           — Verify agent controls claimed identity
+trust_suggest_collateral     — Suggested collateral ratio from history + attestations
+trust_spawn_agent            — Register a new agent
+
+# Escrow lifecycle
+trust_propose_escrow         — Propose escrow with acceptance criteria
+trust_accept_escrow          — Accept escrow as seller
+trust_fund_escrow            — Notify on-chain funding submitted
+trust_escrow_status          — Check escrow status
+trust_deliver                — Submit deliverable for verification
+trust_confirm_delivery       — Buyer manual confirm
+trust_get_verification       — Get verification result
+
+# Disputes
+trust_dispute                — Dispute a transaction
+trust_file_arbitration       — File for formal LLM arbitration
+trust_get_dispute            — Get dispute details
+trust_submit_ruling          — Submit arbitrator ruling
+
+# Policy authoring
+trust_create_policy          — Create policy from natural language
+trust_get_coverage           — Coverage map (clause → constraint)
+trust_revise_policy          — Revise with new intent
+trust_activate_policy        — Activate validated policy
+trust_refine_policy          — Start Argus Codex adversarial refinement
+trust_refinement_status      — Check refinement progress
+
+# Marketplace
+trust_list_marketplace       — Browse community-shared policies
+trust_use_marketplace_policy — Clone a marketplace policy
+
+# Attestations
+trust_query_attestations     — Query attestations for an agent
+trust_publish_attestation    — Publish signed attestation
+
+# Oracle consensus
+trust_join_oracle_pool       — Join oracle verification pool
+trust_withdraw_oracle_pool   — Leave oracle pool
+trust_oracle_status          — Check oracle pool status
+trust_oracle_assignments     — Get pending vote assignments
+trust_submit_oracle_vote     — Submit verification vote
+trust_oracle_earnings        — Check accumulated oracle earnings
+trust_get_oracle_task        — Get oracle task details
+
+# Stripe onboarding
+trust_setup_stripe_customer  — Create Stripe Customer (buyer)
+trust_create_setup_intent    — Create SetupIntent for card collection
+trust_attach_payment_method  — Attach PaymentMethod to agent
+trust_setup_stripe_connect   — Create Express account (seller KYC)
+trust_get_stripe_status      — Check Stripe onboarding status
 ```
 
-**8 tools**, organized by agent decision timeline: discover → verify → assess risk → propose → monitor → deliver → dispute → author policies.
+**37 tools**, organized by agent decision timeline: discover → verify → assess risk → propose → monitor → deliver → dispute → author policies → marketplace → attestations → oracle consensus → Stripe onboarding.
 
 ### 10.6 Quick Start
 
@@ -1635,7 +1645,7 @@ Each phase is independently deployable and produces a usable system.
 48. Stripe Customer + Express Connected Account onboarding routes
 49. Dual PaymentIntent escrow (buyer payment + seller collateral)
 50. Game-theoretic resolution parity with on-chain (release/fail/burn)
-51. SDK methods: `setupStripeCustomer()`, `setupStripeConnect()`, `attachPaymentMethod()`, `getStripeStatus()`
+51. SDK methods: `setupStripeCustomer()`, `createSetupIntent()`, `setupStripeConnect()`, `attachPaymentMethod()`, `getStripeStatus()`
 52. Sandbox mode bypass for Stripe validation (E2E testable without live Stripe)
 53. Platform ID verification complete, Express account creation live in production
 
@@ -1658,7 +1668,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–7 complete.** Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–8 complete.** 501 unit tests (452 API + 36 SDK + 13 MCP) + 49 Foundry + 50 E2E tests. 37 MCP tools. Stripe SetupIntent + onboarding UI live. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
 
 ---
 

@@ -170,10 +170,11 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 
 The system is **production-ready**. All features implemented and verified:
 
-- **498 unit tests** (449 API + 36 SDK + 13 MCP) + 49 Foundry + 50 E2E tests
+- **500+ unit tests** (449 API + 36 SDK + 13 MCP) + 49 Foundry + 50 E2E tests
 - **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
-- **On-chain escrow:** LIVE on Base Sepolia, Base mainnet pending
-- **32 MCP tools** for AI agent integration
+- **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet
+- **37 MCP tools** for AI agent integration
+- **Onboarding UI:** [trustthenverify.com/onboard](https://trustthenverify.com/onboard)
 
 ### Switch to production auth
 
@@ -354,6 +355,11 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/oracles/tasks` | GET | Pubkey | Pending vote assignments |
 | `/oracles/vote` | POST | Signed | Submit verification vote |
 | `/oracles/task/:id` | GET | None | Oracle task status |
+| `/agents/:pubkey/stripe/customer` | POST | Signed | Create Stripe Customer (buyer) |
+| `/agents/:pubkey/stripe/setup-intent` | POST | Signed | Create SetupIntent for card collection |
+| `/agents/:pubkey/stripe/connect` | POST | Signed | Create Express account (seller KYC) |
+| `/agents/:pubkey/stripe/status` | GET | Signed | Check Stripe onboarding status |
+| `/agents/:pubkey/stripe/payment-method` | POST | Signed | Attach payment method |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.
 

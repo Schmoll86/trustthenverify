@@ -98,6 +98,17 @@ nav {
 }
 .nav-links a:hover { color: var(--text); text-decoration: none; }
 
+.nav-cta {
+  background: var(--accent);
+  color: var(--bg) !important;
+  padding: 0.35rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: opacity 0.15s;
+}
+.nav-cta:hover { opacity: 0.85; text-decoration: none !important; }
+
 .nav-status { display: flex; align-items: center; gap: 0.4rem; }
 .dot {
   display: inline-block;

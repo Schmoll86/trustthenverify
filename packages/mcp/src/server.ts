@@ -26,7 +26,7 @@ function fail(err: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// createServer — registers all 32 tools on the McpServer instance
+// createServer — registers all 37 tools on the McpServer instance
 // ---------------------------------------------------------------------------
 
 // Wrapper to avoid TS2589 "Type instantiation is excessively deep" from McpServer generics
@@ -471,6 +471,64 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     { taskId: z.string().describe('Oracle task ID') },
     async ({ taskId }) => {
       try { return ok(await protocol.getOracleTask(taskId)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 33. trust_setup_stripe_customer
+  tool(server,
+    'trust_setup_stripe_customer',
+    'Create a Stripe Customer for buying services via escrow.',
+    {},
+    async () => {
+      try { return ok(await protocol.setupStripeCustomer()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 34. trust_create_setup_intent
+  tool(server,
+    'trust_create_setup_intent',
+    'Create a Stripe SetupIntent to collect a payment method without charging. Returns a clientSecret for Stripe Elements.',
+    {},
+    async () => {
+      try { return ok(await protocol.createSetupIntent()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 35. trust_attach_payment_method
+  tool(server,
+    'trust_attach_payment_method',
+    'Attach a Stripe PaymentMethod to your agent for use in escrow transactions.',
+    { paymentMethodId: z.string().describe('Stripe PaymentMethod ID (pm_...)') },
+    async ({ paymentMethodId }) => {
+      try { return ok(await protocol.attachPaymentMethod(paymentMethodId)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 36. trust_setup_stripe_connect
+  tool(server,
+    'trust_setup_stripe_connect',
+    'Create a Stripe Express connected account for receiving payments as a seller. Returns an onboarding URL.',
+    {
+      returnUrl: z.string().optional().describe('URL to redirect after onboarding'),
+      refreshUrl: z.string().optional().describe('URL to redirect if onboarding link expires'),
+    },
+    async ({ returnUrl, refreshUrl }) => {
+      try { return ok(await protocol.setupStripeConnect({ returnUrl, refreshUrl })) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 37. trust_get_stripe_status
+  tool(server,
+    'trust_get_stripe_status',
+    'Check Stripe onboarding status: customer setup, Connect account, and payment readiness.',
+    {},
+    async () => {
+      try { return ok(await protocol.getStripeStatus()) }
       catch (err) { return fail(err) }
     },
   )

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Started — TrustThenVerify</title>
+  <meta name="description" content="Set up Stripe payments for your AI agent. Buyers add a card, sellers complete KYC. Zero friction onboarding.">
+  <link rel="canonical" href="https://trustthenverify.com/onboard">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://trustthenverify.com/onboard">
+  <meta property="og:title" content="Get Started — TrustThenVerify">
+  <meta property="og:description" content="Set up Stripe payments for your AI agent. Buyers add a card, sellers complete KYC. Zero friction onboarding.">
+  <meta property="og:image" content="https://trustthenverify.com/og-image.png">
+  <meta property="og:site_name" content="TrustThenVerify">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Get Started — TrustThenVerify">
+  <meta name="twitter:description" content="Set up Stripe payments for your AI agent. Buyers add a card, sellers complete KYC.">
+  <meta name="twitter:image" content="https://trustthenverify.com/og-image.png">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%23d4a039' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%23d4a039' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    .onboard-hero { max-width: 1080px; margin: 0 auto; padding: 5rem 2rem 3rem; }
+    .onboard-hero h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.75rem; }
+    .onboard-hero p { color: var(--text-2); font-size: 1rem; max-width: 560px; }
+
+    .paths { max-width: 1080px; margin: 0 auto; padding: 0 2rem 4rem; display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+    @media (max-width: 768px) { .paths { grid-template-columns: 1fr; } }
+
+    .path-card {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 2rem;
+    }
+    .path-card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .path-card .role { font-size: 0.8125rem; color: var(--accent); font-weight: 500; margin-bottom: 1.5rem; }
+
+    .step { margin-bottom: 1.5rem; }
+    .step-label { font-family: var(--mono); font-size: 0.6875rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
+
+    .field-group { margin-bottom: 1rem; }
+    .field-group label { display: block; font-size: 0.8125rem; color: var(--text-2); margin-bottom: 0.35rem; }
+    .field-group input {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.8125rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field-group input:focus { border-color: var(--accent); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-light);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); }
+
+    .status-msg {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-family: var(--mono);
+      display: none;
+    }
+    .status-msg.show { display: block; }
+    .status-msg.ok { background: rgba(52, 211, 153, 0.1); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+    .status-msg.err { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .status-msg.info { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(212, 160, 57, 0.2); }
+
+    #card-element {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.7rem 0.75rem;
+      transition: border-color 0.15s;
+    }
+    #card-element.StripeElement--focus { border-color: var(--accent); }
+
+    .step-done { opacity: 0.5; pointer-events: none; }
+
+    .link-out { color: var(--accent); font-size: 0.8125rem; word-break: break-all; }
+
+    .mode-toggle {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 2rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-2);
+    }
+    .mode-toggle select {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.3rem 0.5rem;
+      color: var(--text);
+      font-size: 0.8125rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo" aria-label="TrustThenVerify home">
+      <svg class="logo-mark" width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M10.5 16l3.5 3.5L22 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      TrustThenVerify
+    </a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <section class="onboard-hero">
+    <h1>Get started in 3 steps.</h1>
+    <p>Set up Stripe payments for your agent. Buyers add a card, sellers complete KYC. Use sandbox mode to test without real money.</p>
+  </section>
+
+  <div class="mode-toggle">
+    <label for="env-select">Environment:</label>
+    <select id="env-select">
+      <option value="sandbox" selected>Sandbox</option>
+      <option value="production">Production</option>
+    </select>
+    <span id="env-hint" style="color: var(--text-3)">No real charges. Free to experiment.</span>
+  </div>
+
+  <div class="paths">
+
+    <!-- Buyer Path -->
+    <div class="path-card">
+      <h2>Buyer</h2>
+      <p class="role">Add a payment method to fund escrows</p>
+
+      <div class="step" id="buyer-step1">
+        <div class="step-label">Step 1 &mdash; Agent Public Key</div>
+        <div class="field-group">
+          <label for="buyer-pubkey">Your agent's secp256k1 public key (hex)</label>
+          <input type="text" id="buyer-pubkey" placeholder="03abc123..." spellcheck="false" autocomplete="off">
+        </div>
+        <button class="btn" id="buyer-create-customer">Create Stripe Customer</button>
+        <div class="status-msg" id="buyer-step1-msg"></div>
+      </div>
+
+      <div class="step" id="buyer-step2" style="display:none">
+        <div class="step-label">Step 2 &mdash; Add Card</div>
+        <div class="field-group">
+          <label>Card details (powered by Stripe)</label>
+          <div id="card-element"></div>
+        </div>
+        <button class="btn" id="buyer-save-card" style="margin-top:0.75rem">Save Card</button>
+        <div class="status-msg" id="buyer-step2-msg"></div>
+      </div>
+
+      <div class="step" id="buyer-step3" style="display:none">
+        <div class="step-label">Step 3 &mdash; Done</div>
+        <div class="status-msg show ok">Payment method attached. Your agent can now fund escrows.</div>
+      </div>
+    </div>
+
+    <!-- Seller Path -->
+    <div class="path-card">
+      <h2>Seller</h2>
+      <p class="role">Complete KYC to receive escrow payouts</p>
+
+      <div class="step" id="seller-step1">
+        <div class="step-label">Step 1 &mdash; Agent Public Key</div>
+        <div class="field-group">
+          <label for="seller-pubkey">Your agent's secp256k1 public key (hex)</label>
+          <input type="text" id="seller-pubkey" placeholder="03abc123..." spellcheck="false" autocomplete="off">
+        </div>
+        <button class="btn" id="seller-start-kyc">Start KYC</button>
+        <div class="status-msg" id="seller-step1-msg"></div>
+      </div>
+
+      <div class="step" id="seller-step2" style="display:none">
+        <div class="step-label">Step 2 &mdash; Complete Onboarding</div>
+        <p style="font-size:0.8125rem;color:var(--text-2);margin-bottom:0.75rem">Complete your identity verification on Stripe's hosted page:</p>
+        <a id="seller-onboard-link" href="#" target="_blank" class="link-out"></a>
+        <button class="btn btn-outline" id="seller-check-status" style="margin-top:1rem">Check Status</button>
+        <div class="status-msg" id="seller-step2-msg"></div>
+      </div>
+
+      <div class="step" id="seller-step3" style="display:none">
+        <div class="step-label">Step 3 &mdash; Done</div>
+        <div class="status-msg show ok">KYC complete. Your agent can now receive escrow payouts.</div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M10.5 16l3.5 3.5L22 12" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+      <span>MIT License</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health">API</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Config
+  const PK_LIVE = 'pk_live_51ST8scJc7Iv6B67gXRZRTnkbmzEgMDdixvmUd8RkKhW8HIkccWIv9wrTdhnOGqqQnqLJl338Y4KlbiMmgtKLcnqY00WjcuChBX'
+  const SANDBOX_KEY = ''  // Users paste their own or leave blank for ECDSA
+  const URLS = {
+    sandbox: 'https://sandbox.trustthenverify.com/v2',
+    production: 'https://api.trustthenverify.com/v2',
+  }
+
+  let env = 'sandbox'
+  let apiUrl = URLS.sandbox
+  let stripe, elements, cardElement
+
+  // ── Helpers ──────────────────────────────────────────────
+  function msg(id, text, type) {
+    const el = document.getElementById(id)
+    el.className = 'status-msg show ' + type
+    el.textContent = text
+  }
+
+  function getHeaders(pubkey) {
+    if (env === 'sandbox') {
+      return {
+        'Content-Type': 'application/json',
+        'X-Sandbox-Key': SANDBOX_KEY || 'demo',
+        'X-Agent-Pubkey': pubkey,
+      }
+    }
+    // Production requires ECDSA — agents should use the SDK directly
+    return { 'Content-Type': 'application/json' }
+  }
+
+  async function apiPost(path, body, pubkey) {
+    const res = await fetch(apiUrl + path, {
+      method: 'POST',
+      headers: getHeaders(pubkey),
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
+    return json.data
+  }
+
+  async function apiGet(path, pubkey) {
+    const res = await fetch(apiUrl + path, {
+      headers: getHeaders(pubkey),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
+    return json.data
+  }
+
+  // ── Environment toggle ──────────────────────────────────
+  document.getElementById('env-select').addEventListener('change', function () {
+    env = this.value
+    apiUrl = URLS[env]
+    document.getElementById('env-hint').textContent =
+      env === 'sandbox' ? 'No real charges. Free to experiment.' : 'Live mode. Real money.'
+  })
+
+  // ── Init Stripe Elements ────────────────────────────────
+  function initStripe() {
+    stripe = Stripe(PK_LIVE)
+    elements = stripe.elements()
+    cardElement = elements.create('card', {
+      style: {
+        base: {
+          color: '#e8e8e8',
+          fontFamily: '"SF Mono", "Fira Code", monospace',
+          fontSize: '14px',
+          '::placeholder': { color: '#666' },
+        },
+        invalid: { color: '#ef4444' },
+      },
+    })
+  }
+
+  // ── Buyer flow ──────────────────────────────────────────
+  document.getElementById('buyer-create-customer').addEventListener('click', async function () {
+    const pubkey = document.getElementById('buyer-pubkey').value.trim()
+    if (!pubkey) return msg('buyer-step1-msg', 'Enter your agent public key', 'err')
+    this.disabled = true
+    try {
+      await apiPost('/agents/' + pubkey + '/stripe/customer', {}, pubkey)
+      msg('buyer-step1-msg', 'Stripe Customer created', 'ok')
+      document.getElementById('buyer-step1').classList.add('step-done')
+      document.getElementById('buyer-step2').style.display = ''
+
+      // Mount card element
+      if (!stripe) initStripe()
+      cardElement.mount('#card-element')
+    } catch (e) {
+      msg('buyer-step1-msg', e.message, 'err')
+      this.disabled = false
+    }
+  })
+
+  document.getElementById('buyer-save-card').addEventListener('click', async function () {
+    const pubkey = document.getElementById('buyer-pubkey').value.trim()
+    this.disabled = true
+    try {
+      // 1. Create SetupIntent
+      const si = await apiPost('/agents/' + pubkey + '/stripe/setup-intent', {}, pubkey)
+
+      // 2. Confirm with Stripe.js (collects card)
+      const { error, setupIntent } = await stripe.confirmCardSetup(si.clientSecret, {
+        payment_method: { card: cardElement },
+      })
+      if (error) throw new Error(error.message)
+
+      // 3. Attach the payment method
+      await apiPost('/agents/' + pubkey + '/stripe/payment-method', {
+        paymentMethodId: setupIntent.payment_method,
+      }, pubkey)
+
+      msg('buyer-step2-msg', 'Card saved successfully', 'ok')
+      document.getElementById('buyer-step2').classList.add('step-done')
+      document.getElementById('buyer-step3').style.display = ''
+    } catch (e) {
+      msg('buyer-step2-msg', e.message, 'err')
+      this.disabled = false
+    }
+  })
+
+  // ── Seller flow ─────────────────────────────────────────
+  document.getElementById('seller-start-kyc').addEventListener('click', async function () {
+    const pubkey = document.getElementById('seller-pubkey').value.trim()
+    if (!pubkey) return msg('seller-step1-msg', 'Enter your agent public key', 'err')
+    this.disabled = true
+    try {
+      const result = await apiPost('/agents/' + pubkey + '/stripe/connect', {
+        returnUrl: window.location.href,
+        refreshUrl: window.location.href,
+      }, pubkey)
+      msg('seller-step1-msg', 'Express account created', 'ok')
+      document.getElementById('seller-step1').classList.add('step-done')
+      document.getElementById('seller-step2').style.display = ''
+      const link = document.getElementById('seller-onboard-link')
+      link.href = result.onboardingUrl
+      link.textContent = result.onboardingUrl
+    } catch (e) {
+      msg('seller-step1-msg', e.message, 'err')
+      this.disabled = false
+    }
+  })
+
+  document.getElementById('seller-check-status').addEventListener('click', async function () {
+    const pubkey = document.getElementById('seller-pubkey').value.trim()
+    try {
+      const status = await apiGet('/agents/' + pubkey + '/stripe/status', pubkey)
+      if (status.onboardingComplete) {
+        msg('seller-step2-msg', 'Onboarding complete', 'ok')
+        document.getElementById('seller-step2').classList.add('step-done')
+        document.getElementById('seller-step3').style.display = ''
+      } else {
+        msg('seller-step2-msg', 'Onboarding not yet complete. Charges: ' +
+          (status.chargesEnabled ? 'yes' : 'no') + ', Payouts: ' +
+          (status.payoutsEnabled ? 'yes' : 'no'), 'info')
+      }
+    } catch (e) {
+      msg('seller-step2-msg', e.message, 'err')
+    }
+  })
+})()
+</script>
+
+</body>
+</html>

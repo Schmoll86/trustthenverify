@@ -656,6 +656,10 @@ export class TrustProtocol {
     return this.get(`/agents/${this.publicKey}/stripe/status`)
   }
 
+  async createSetupIntent(): Promise<{ setupIntentId: string; clientSecret: string }> {
+    return this.post(`/agents/${this.publicKey}/stripe/setup-intent`, {})
+  }
+
   async attachPaymentMethod(paymentMethodId: string): Promise<Agent> {
     return this.post(`/agents/${this.publicKey}/stripe/payment-method`, { paymentMethodId })
   }

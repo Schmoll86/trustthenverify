@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://trustthenverify.com/sitemap.xml

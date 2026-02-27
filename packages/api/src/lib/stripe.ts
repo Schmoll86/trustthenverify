@@ -33,6 +33,12 @@ export interface StripeService {
     detailsSubmitted: boolean
   }>
 
+  /** Create a SetupIntent for a Customer (card collection without immediate charge). */
+  createSetupIntent(params: {
+    customerId: string
+    metadata?: Record<string, string>
+  }): Promise<{ setupIntentId: string; clientSecret: string }>
+
   /** Attach a payment method to a Customer. */
   attachPaymentMethod(params: {
     customerId: string
@@ -190,6 +196,26 @@ export class RealStripeService implements StripeService {
       chargesEnabled: account.charges_enabled as boolean,
       payoutsEnabled: account.payouts_enabled as boolean,
       detailsSubmitted: account.details_submitted as boolean,
+    }
+  }
+
+  async createSetupIntent(params: {
+    customerId: string
+    metadata?: Record<string, string>
+  }): Promise<{ setupIntentId: string; clientSecret: string }> {
+    const body: Record<string, string> = {
+      customer: params.customerId,
+      usage: 'off_session',
+    }
+    if (params.metadata) {
+      for (const [k, v] of Object.entries(params.metadata)) {
+        body[`metadata[${k}]`] = v
+      }
+    }
+    const result = await this.stripePost('/setup_intents', body)
+    return {
+      setupIntentId: result.id as string,
+      clientSecret: result.client_secret as string,
     }
   }
 

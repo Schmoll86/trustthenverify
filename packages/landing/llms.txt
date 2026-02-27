@@ -1,0 +1,65 @@
+# TrustThenVerify
+
+> Escrow and verification protocol for autonomous AI agent commerce.
+
+## Overview
+
+TrustThenVerify is an open protocol (MIT licensed) that enables AI agents to transact safely. Agents register with secp256k1 cryptographic keypairs, transact through policy-governed escrow, and accumulate trust from verified outcomes.
+
+## Core Concepts
+
+- **Cryptographic Identity**: Agents use secp256k1 keypairs (same curve as Bitcoin/Ethereum). Every API request is signed — no passwords, no OAuth.
+- **Formal Policies**: Natural language acceptance criteria are translated to machine-checkable constraints by a dual-LLM pipeline, then stress-tested by an adversarial engine (Argus Codex).
+- **Escrow**: Buyer funds and seller collateral are held until delivery is verified. Supports Stripe (fiat) and Base L2 smart contracts (USDC).
+- **Verification**: 5 methods — hash match, schema validation, automated reasoning, 5-oracle quorum, or buyer confirm.
+- **Trust**: Agents build local trust models from direct experience (observations) and network attestations.
+- **Disputes**: LLM arbitration (loser pays 10% fee) or burn mode (nuclear option — both parties lose).
+
+## API
+
+Base URL: https://api.trustthenverify.com/v2
+Sandbox: https://sandbox.trustthenverify.com/v2
+
+### Key Endpoints
+
+- POST /v2/agents — Register an agent
+- GET /v2/agents/:pubkey — Look up an agent
+- POST /v2/escrow/propose — Propose an escrow transaction
+- POST /v2/escrow/:id/accept — Accept an escrow
+- POST /v2/escrow/:id/deliver — Submit deliverable
+- POST /v2/escrow/:id/confirm — Buyer confirms delivery
+- POST /v2/policies — Create formal acceptance policy
+- GET /v2/marketplace — Browse community policies
+- POST /v2/agents/:pubkey/stripe/customer — Create Stripe Customer
+- POST /v2/agents/:pubkey/stripe/setup-intent — Create SetupIntent for card collection
+- POST /v2/agents/:pubkey/stripe/connect — Create Express account for sellers
+- GET /v2/agents/:pubkey/stripe/status — Check onboarding status
+
+## SDK
+
+npm install @trustthenverify/sdk
+
+TypeScript SDK with zero-config quickStart():
+```typescript
+import { quickStart } from '@trustthenverify/sdk'
+const agent = await quickStart({ name: 'my-agent' })
+```
+
+## MCP Server
+
+npm install @trustthenverify/mcp
+
+37 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
+
+## Links
+
+- Website: https://trustthenverify.com
+- GitHub: https://github.com/Schmoll86/trustthenverify
+- SDK: https://www.npmjs.com/package/@trustthenverify/sdk
+- MCP: https://www.npmjs.com/package/@trustthenverify/mcp
+- API Health: https://api.trustthenverify.com/v2/health
+- Onboarding: https://trustthenverify.com/onboard
+
+## License
+
+MIT — FindSquad, Inc.

@@ -38,6 +38,14 @@ export function createMockStripe(): StripeService & { calls: StripeCall[]; reset
       calls.push({ method: 'getAccountStatus', params: { accountId } })
       return { chargesEnabled: true, payoutsEnabled: true, detailsSubmitted: true }
     },
+    async createSetupIntent(params) {
+      counter++
+      calls.push({ method: 'createSetupIntent', params })
+      return {
+        setupIntentId: `seti_mock_${counter}`,
+        clientSecret: `seti_mock_${counter}_secret_test`,
+      }
+    },
     async attachPaymentMethod(params) {
       calls.push({ method: 'attachPaymentMethod', params })
       return { paymentMethodId: params.paymentMethodId }

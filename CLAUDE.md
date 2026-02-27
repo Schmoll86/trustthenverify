@@ -55,6 +55,8 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - **Stripe Connect: WORKING** — platform ID verified, Express accounts can be created in production.
 - Buyer-side (Stripe Customer creation) works in production.
 - Seller-side (Express connected accounts + onboarding) works in production.
+- SetupIntents: `POST /v2/agents/:pubkey/stripe/setup-intent` — creates SetupIntent for Stripe Elements card collection. Requires `Setup Intents: Write` permission on restricted key.
+- Publishable key: `pk_live_51ST8sc...` embedded in onboarding page (client-side safe).
 - Service: `packages/api/src/lib/stripe.ts` — raw `fetch()` to `api.stripe.com/v1`.
 
 ## Testing
