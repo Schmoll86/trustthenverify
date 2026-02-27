@@ -55,8 +55,8 @@ export function checkConsensus(
 // ─── Service interface ───
 
 export interface OracleService {
-  /** Select eligible oracles, excluding buyer/seller. Returns oracle pool IDs. */
-  selectOracles(buyerId: string, sellerId: string, count: number): Promise<OraclePoolRow[]>
+  /** Select eligible oracles, excluding buyer/seller. Filters by capabilities if provided. Returns oracle pool IDs. */
+  selectOracles(buyerId: string, sellerId: string, count: number, requiredCapabilities?: string[]): Promise<OraclePoolRow[]>
 
   /** Create an oracle task with vote assignments. Returns the task row. */
   createTask(
@@ -102,7 +102,7 @@ export class RealOracleService implements OracleService {
     this.env = env
   }
 
-  async selectOracles(buyerId: string, sellerId: string, count: number): Promise<OraclePoolRow[]> {
+  async selectOracles(buyerId: string, sellerId: string, count: number, requiredCapabilities?: string[]): Promise<OraclePoolRow[]> {
     // Get active oracles excluding buyer and seller
     const { data, error } = await this.db
       .from('oracle_pool')
@@ -117,8 +117,20 @@ export class RealOracleService implements OracleService {
       (o) => o.agent_id !== buyerId && o.agent_id !== sellerId,
     )
 
+    // Filter by required capabilities if specified
+    let candidates: OraclePoolRow[]
+    if (requiredCapabilities && requiredCapabilities.length > 0) {
+      const capable = eligible.filter((o) =>
+        requiredCapabilities.some((cap) => o.capabilities.includes(cap)),
+      )
+      // Fallback: if <count capable oracles, relax to any active oracle
+      candidates = capable.length >= count ? capable : eligible
+    } else {
+      candidates = eligible
+    }
+
     // Random selection
-    const shuffled = eligible.sort(() => Math.random() - 0.5)
+    const shuffled = candidates.sort(() => Math.random() - 0.5)
     return shuffled.slice(0, count)
   }
 
@@ -280,7 +292,14 @@ export class RealOracleService implements OracleService {
 
     if (taskErr || !task) throw new Error('Oracle task not found')
 
-    const feeCents = parseInt(this.env.ORACLE_FEE_CENTS ?? '100', 10)
+    // Prefer buyer-funded oracle_fee_cents from escrow, fall back to env default
+    const { data: escrowRow } = await this.db
+      .from('escrows')
+      .select('oracle_fee_cents')
+      .eq('id', task.escrow_id)
+      .single()
+
+    const totalFeeCents = escrowRow?.oracle_fee_cents ?? parseInt(this.env.ORACLE_FEE_CENTS ?? '100', 10)
 
     // Get all submitted votes for payment
     const { data: votes } = await this.db
@@ -289,14 +308,16 @@ export class RealOracleService implements OracleService {
       .eq('oracle_task_id', oracleTaskId)
       .eq('status', 'submitted')
 
-    // Create payment records for all oracles who voted
+    // Create payment records for all oracles who voted, funded by buyer surcharge
     if (votes && votes.length > 0) {
+      const perOracleFee = Math.floor(totalFeeCents / votes.length)
       const payments = votes.map((v: OracleVoteRow) => ({
         oracle_task_id: oracleTaskId,
         oracle_id: v.oracle_id,
         agent_id: v.agent_id,
-        amount_cents: feeCents,
+        amount_cents: perOracleFee,
         status: 'pending',
+        funded_by: 'buyer_surcharge',
       }))
 
       await this.db.from('oracle_payments').insert(payments)

@@ -1584,7 +1584,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** Tasks with formal policies are verified automatically. Coverage maps surface gaps at authoring time. No buyer confirmation needed. Dispute rate drops dramatically.
 
-### Phase 3 — Argus Codex (2–3 weeks)
+### Phase 3 — Argus Codex (2–3 weeks) ✅
 
 25. Adversarial refinement engine (LLM pair via Cloudflare Queue)
 26. Refinement API (async trigger + status polling)
@@ -1594,6 +1594,7 @@ Each phase is independently deployable and produces a usable system.
 30. Auto-approval for high-coverage Tier-1-only policies (≥0.9 coverage, no Tier 2)
 31. Policy template marketplace (community-refined policies, revenue share)
 32. Platform-amortized billing model for TTV default templates
+33. Auto-refinement cron (weekly dispute-rate check, auto-enqueue refinement)
 
 **Deliverable:** Policies are adversarially tested before deployment. Policy gaps caught before they become exploits. Marketplace enables cost sharing across developers.
 
@@ -1607,22 +1608,25 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** Trustless on-chain escrow for agents that want it.
 
-### Phase 5 — Attestations (1–2 weeks)
+### Phase 5 — Attestations (1–2 weeks) ✅
 39. Attestation signing and Nostr publishing
 40. Attestation query
 41. `suggestCollateral()` using attestations + on-chain history
 42. SDK integration
+43. MCP tool for attestation querying (`trust_query_attestations`)
 
 **Deliverable:** Organic reputation emerges from transaction outcomes.
 
-### Phase 6 — Oracle Verification (2–3 weeks)
+### Phase 6 — Oracle Verification (2–3 weeks) ✅
 43. Oracle agent pool (opt-in registration, capability tags, withdraw)
 44. Oracle dispatch via Cloudflare Queue (select 5, exclude parties, fallback)
 45. Oracle consensus logic (quorum 3/5, early termination, timeout sweep)
-46. Oracle payment — platform-funded, all voters paid (see §3.5.4)
+46. Oracle payment — buyer-surcharge-funded, all voters paid (see §3.5.4)
 47. `oracle_consensus` verification method wired into deliver route + cron
-48. Oracle API: join, withdraw, status, tasks, vote, task detail (see §3.5.7)
+48. Oracle API: join, withdraw, status, tasks, vote, task detail, earnings (see §3.5.7)
 49. SDK types and TrustProtocol methods for oracle interaction
+50. Capability tag filtering in oracle selection (with fallback)
+51. Oracle earnings endpoint + SDK + MCP tool
 
 **Deliverable:** Subjective tasks verified by independent oracle consensus. Full design in §3.5.
 
@@ -1633,6 +1637,7 @@ Each phase is independently deployable and produces a usable system.
 50. Game-theoretic resolution parity with on-chain (release/fail/burn)
 51. SDK methods: `setupStripeCustomer()`, `setupStripeConnect()`, `attachPaymentMethod()`, `getStripeStatus()`
 52. Sandbox mode bypass for Stripe validation (E2E testable without live Stripe)
+53. Platform ID verification complete, Express account creation live in production
 
 **Deliverable:** Full Stripe-mode escrow with per-agent identity, collateral enforcement, and outcome-based fund distribution.
 
@@ -1653,7 +1658,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) Phases 6–9 are ongoing. Phase 8 depends on external zkML maturation.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–7 complete.** Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
 
 ---
 

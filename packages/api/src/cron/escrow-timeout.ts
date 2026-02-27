@@ -216,6 +216,59 @@ export async function handleOracleTimeout(
   return { processed }
 }
 
+/** Auto-refinement: weekly check for policies with high dispute rates. */
+export async function handleAutoRefinement(
+  env: Env,
+): Promise<{ enqueued: number }> {
+  const db = createDb(env)
+  const disputeThreshold = parseInt(env.AUTO_REFINE_DISPUTE_THRESHOLD ?? '3', 10)
+
+  // Find active policies with high dispute rates and no active refinement
+  // Count disputes per policy via escrows
+  const { data: policiesWithDisputes } = await db
+    .from('escrows')
+    .select('policy_id')
+    .eq('status', 'disputed')
+    .not('policy_id', 'is', null)
+
+  if (!policiesWithDisputes || policiesWithDisputes.length === 0) {
+    return { enqueued: 0 }
+  }
+
+  // Count disputes per policy
+  const disputeCounts = new Map<string, number>()
+  for (const row of policiesWithDisputes) {
+    const policyId = row.policy_id as string
+    disputeCounts.set(policyId, (disputeCounts.get(policyId) ?? 0) + 1)
+  }
+
+  let enqueued = 0
+
+  for (const [policyId, count] of disputeCounts) {
+    if (count < disputeThreshold) continue
+
+    // Check no active refinement exists
+    const { data: activeRefinement } = await db
+      .from('refinements')
+      .select('id')
+      .eq('policy_id', policyId)
+      .eq('status', 'running')
+      .limit(1)
+
+    if (activeRefinement && activeRefinement.length > 0) continue
+
+    // Enqueue argus_refine
+    await env.QUEUE.send({
+      type: 'argus_refine',
+      policyId,
+      budget: 5,
+    })
+    enqueued++
+  }
+
+  return { enqueued }
+}
+
 function createOnchainService(env: Env): OnchainService {
   return new RealOnchainService(
     env.BASE_RPC_URL ?? 'https://mainnet.base.org',

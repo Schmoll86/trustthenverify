@@ -11,7 +11,8 @@ import { attestations } from './routes/attestations'
 import { disputes } from './routes/disputes'
 import { oracles } from './routes/oracles'
 import { channels } from './routes/channels'
-import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout } from './cron/escrow-timeout'
+import { marketplace } from './routes/marketplace'
+import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement } from './cron/escrow-timeout'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 import { handleOracleDispatch, type OracleQueueMessage } from './queue/oracle-consumer'
 
@@ -53,6 +54,7 @@ app.route('/v2/attestations', attestations)
 app.route('/v2/disputes', disputes)
 app.route('/v2/oracles', oracles)
 app.route('/v2/channels', channels)
+app.route('/v2/marketplace', marketplace)
 
 export default {
   fetch: app.fetch,
@@ -60,6 +62,7 @@ export default {
     await handleEscrowTimeout(env)
     await handleOnchainFunding(env)
     await handleOracleTimeout(env)
+    await handleAutoRefinement(env)
   },
   async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage>, env: Env) {
     for (const msg of batch.messages) {

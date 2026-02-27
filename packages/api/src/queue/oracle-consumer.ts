@@ -40,8 +40,13 @@ export async function handleOracleDispatch(
   const quorum = 3
   const oracleCount = 5
 
-  // Select oracles (exclude buyer and seller)
-  const oracles = await oracle.selectOracles(esc.buyer_id, esc.seller_id, oracleCount)
+  // Extract required capabilities from task spec for oracle matching
+  const requiredCapabilities = Array.isArray(esc.task_spec?.requiredCapabilities)
+    ? esc.task_spec.requiredCapabilities as string[]
+    : undefined
+
+  // Select oracles (exclude buyer and seller, filter by capabilities)
+  const oracles = await oracle.selectOracles(esc.buyer_id, esc.seller_id, oracleCount, requiredCapabilities)
 
   if (oracles.length < oracleCount) {
     // Insufficient oracles — fallback to buyer_confirm

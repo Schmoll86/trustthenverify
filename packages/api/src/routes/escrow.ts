@@ -167,6 +167,12 @@ escrow.post('/propose', async (c) => {
   const proposalWindowMs = 15 * 60 * 1000 // 15 minutes
   const expiresAt = new Date(Date.now() + proposalWindowMs).toISOString()
 
+  // Oracle consensus verification requires a buyer surcharge for oracle fees
+  const verificationMethod = body.verificationMethod ?? 'buyer_confirm'
+  const oracleFeeCents = verificationMethod === 'oracle_consensus'
+    ? parseInt(c.env.ORACLE_FEE_CENTS ?? '500', 10)
+    : 0
+
   const { data: row, error: dbError } = await db
     .from('escrows')
     .insert({
@@ -177,7 +183,7 @@ escrow.post('/propose', async (c) => {
       task_hash: taskHash,
       task_spec: body.taskSpec,
       policy_id: body.policyId ?? null,
-      verification_method: body.verificationMethod ?? 'buyer_confirm',
+      verification_method: verificationMethod,
       dispute_resolution: body.disputeResolution ?? 'arbitrate',
       status: 'proposed',
       timeout_seconds: timeoutSeconds,
@@ -187,6 +193,7 @@ escrow.post('/propose', async (c) => {
       seller_address: body.sellerAddress ?? null,
       chain_id: fundingMode === 'onchain' ? parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10) : null,
       buyer_payment_method_id: body.buyerPaymentMethodId ?? null,
+      oracle_fee_cents: oracleFeeCents,
     })
     .select()
     .single()

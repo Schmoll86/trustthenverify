@@ -16,9 +16,9 @@ function mockProtocol(): TrustProtocol {
     'disputeEscrow', 'fileForArbitration', 'getDispute', 'submitRuling',
     'createPolicy', 'getCoverage', 'revisePolicy', 'activatePolicy',
     'refinePolicy', 'refinementStatus',
-    'publishAttestation',
+    'publishAttestation', 'useMarketplacePolicy',
     'joinOraclePool', 'withdrawFromOraclePool', 'getOracleStatus',
-    'getOracleAssignments', 'submitOracleVote', 'getOracleTask',
+    'getOracleAssignments', 'submitOracleVote', 'getOracleEarnings', 'getOracleTask',
   ] as const
   for (const m of methods) {
     proto[m] = vi.fn().mockResolvedValue({ mock: m })
@@ -51,12 +51,16 @@ const EXPECTED_TOOLS = [
   'trust_activate_policy',
   'trust_refine_policy',
   'trust_refinement_status',
+  'trust_list_marketplace',
+  'trust_use_marketplace_policy',
+  'trust_query_attestations',
   'trust_publish_attestation',
   'trust_join_oracle_pool',
   'trust_withdraw_oracle_pool',
   'trust_oracle_status',
   'trust_oracle_assignments',
   'trust_submit_oracle_vote',
+  'trust_oracle_earnings',
   'trust_get_oracle_task',
 ]
 
@@ -85,9 +89,9 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP tool registration', () => {
-  it('registers exactly 28 tools', async () => {
+  it('registers exactly 32 tools', async () => {
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(28)
+    expect(tools).toHaveLength(32)
   })
 
   it('registers all expected tool names', async () => {

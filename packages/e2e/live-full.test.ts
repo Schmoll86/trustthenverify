@@ -356,6 +356,74 @@ describe('Production — Payment Channels', { timeout: 30_000 }, () => {
   })
 })
 
+// ── Attestation Routes ──────────────────────────────────────────────────────
+
+describe('Production — Attestations', { timeout: 30_000 }, () => {
+  const author = generateKeypair()
+  const subject = generateKeypair()
+
+  it('publishes attestation and queries by pubkey', async () => {
+    await authedFetch('POST', '/v2/agents', { publicKey: author.publicKey, name: 'live-att-author' }, author)
+    const subjectRes = await authedFetch('POST', '/v2/agents', { publicKey: subject.publicKey, name: 'live-att-subject' }, subject)
+    const subjectId = (subjectRes.data as Record<string, unknown>).id as string
+    expect(subjectId).toBeTruthy()
+
+    const { status, data } = await authedFetch('POST', '/v2/attestations', {
+      subjectId,
+      outcome: 'success',
+      verificationMethod: 'buyer_confirm',
+    }, author)
+    expect(status).toBe(201)
+    expect((data as Record<string, unknown>).outcome).toBe('success')
+
+    // Query attestations by public key
+    const res = await fetch(`${API_URL}/v2/attestations/${subject.publicKey}`)
+    expect(res.status).toBe(200)
+    const json = await res.json() as { data: unknown[] }
+    expect(json.data.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ── Marketplace Routes ──────────────────────────────────────────────────────
+
+describe('Production — Marketplace', { timeout: 15_000 }, () => {
+  it('GET /v2/marketplace returns list', async () => {
+    const res = await fetch(`${API_URL}/v2/marketplace`)
+    expect(res.status).toBe(200)
+    const json = await res.json() as { data: unknown[] }
+    expect(Array.isArray(json.data)).toBe(true)
+  })
+})
+
+// ── Oracle Pool Routes ──────────────────────────────────────────────────────
+
+describe('Production — Oracle Pool', { timeout: 30_000 }, () => {
+  const oracle = generateKeypair()
+
+  it('join → status → earnings → withdraw', async () => {
+    await authedFetch('POST', '/v2/agents', { publicKey: oracle.publicKey, name: 'live-oracle', capabilities: ['verification'] }, oracle)
+
+    // Join
+    const join = await authedFetch('POST', '/v2/oracles/join', { capabilities: ['verification'] }, oracle)
+    expect(join.status).toBe(201)
+    expect((join.data as Record<string, unknown>).status).toBe('active')
+
+    // Status
+    const status = await authedFetch('GET', '/v2/oracles/status', null, oracle)
+    expect(status.status).toBe(200)
+
+    // Earnings
+    const earnings = await authedFetch('GET', '/v2/oracles/earnings', null, oracle)
+    expect(earnings.status).toBe(200)
+    expect((earnings.data as Record<string, unknown>).totalCents).toBe(0)
+
+    // Withdraw
+    const withdraw = await authedFetch('POST', '/v2/oracles/withdraw', {}, oracle)
+    expect(withdraw.status).toBe(200)
+    expect((withdraw.data as Record<string, unknown>).status).toBe('withdrawn')
+  })
+})
+
 // ── Response Envelope ────────────────────────────────────────────────────────
 
 describe('Production — Response Envelope', { timeout: 15_000 }, () => {

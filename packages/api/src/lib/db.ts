@@ -24,6 +24,8 @@ export interface Env {
   // Phase 6: Oracle verification
   ORACLE_FEE_CENTS?: string           // default: '100' ($1.00)
   ORACLE_VOTING_WINDOW_SECONDS?: string // default: '1800' (30 min)
+  // Phase 3: Auto-refinement
+  AUTO_REFINE_DISPUTE_THRESHOLD?: string // default: '3'
   // Rate limiting
   RATE_LIMIT_KV?: KVNamespace
   // Arbitration

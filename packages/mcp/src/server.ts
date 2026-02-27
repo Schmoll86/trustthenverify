@@ -6,6 +6,8 @@ import { z } from 'zod'
 import {
   TrustProtocol,
   searchAgents,
+  queryAttestations,
+  listMarketplacePolicies,
   type VerificationMethod,
   type FundingMode,
 } from '@trustthenverify/sdk'
@@ -24,7 +26,7 @@ function fail(err: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// createServer — registers all 28 tools on the McpServer instance
+// createServer — registers all 32 tools on the McpServer instance
 // ---------------------------------------------------------------------------
 
 // Wrapper to avoid TS2589 "Type instantiation is excessively deep" from McpServer generics
@@ -337,7 +339,44 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 22. trust_publish_attestation
+  // 22. trust_list_marketplace
+  tool(server,
+    'trust_list_marketplace',
+    'Browse community-shared policy templates from the marketplace.',
+    {},
+    async () => {
+      try { return ok(await listMarketplacePolicies({ apiUrl })) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 23. trust_use_marketplace_policy
+  tool(server,
+    'trust_use_marketplace_policy',
+    'Clone a marketplace policy for your own use.',
+    { policyId: z.string().describe('Marketplace policy ID to clone') },
+    async ({ policyId }) => {
+      try { return ok(await protocol.useMarketplacePolicy(policyId)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 24. trust_query_attestations
+  tool(server,
+    'trust_query_attestations',
+    'Query published attestations for a given agent. Returns attestations from the network.',
+    {
+      pubkey: z.string().describe("Agent's public key (hex) to query attestations for"),
+      limit: z.number().optional().describe('Maximum number of attestations to return'),
+    },
+    async ({ pubkey, limit }) => {
+      try {
+        return ok(await queryAttestations(pubkey, { limit, apiUrl }))
+      } catch (err) { return fail(err) }
+    },
+  )
+
+  // 25. trust_publish_attestation
   tool(server,
     'trust_publish_attestation',
     'Publish a signed attestation about a counterparty to the Nostr relay network.',
@@ -353,7 +392,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 23. trust_join_oracle_pool
+  // 26. trust_join_oracle_pool
   tool(server,
     'trust_join_oracle_pool',
     'Join the oracle pool to earn fees by verifying deliverables for other agents.',
@@ -366,7 +405,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 24. trust_withdraw_oracle_pool
+  // 27. trust_withdraw_oracle_pool
   tool(server,
     'trust_withdraw_oracle_pool',
     'Withdraw from the oracle pool.',
@@ -377,7 +416,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 25. trust_oracle_status
+  // 28. trust_oracle_status
   tool(server,
     'trust_oracle_status',
     'Check your current oracle pool status.',
@@ -388,7 +427,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 26. trust_oracle_assignments
+  // 29. trust_oracle_assignments
   tool(server,
     'trust_oracle_assignments',
     'Get your pending oracle task assignments.',
@@ -399,7 +438,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 27. trust_submit_oracle_vote
+  // 30. trust_submit_oracle_vote
   tool(server,
     'trust_submit_oracle_vote',
     'Submit a verification vote for an oracle task.',
@@ -414,7 +453,18 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 28. trust_get_oracle_task
+  // 31. trust_oracle_earnings
+  tool(server,
+    'trust_oracle_earnings',
+    'Get your accumulated oracle earnings from verifying deliverables.',
+    {},
+    async () => {
+      try { return ok(await protocol.getOracleEarnings()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 32. trust_get_oracle_task
   tool(server,
     'trust_get_oracle_task',
     'Get details of a specific oracle verification task.',

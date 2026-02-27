@@ -281,6 +281,55 @@ oracles.post('/vote', async (c) => {
   }
 })
 
+// ── GET /oracles/earnings — accumulated oracle earnings ──────────────────
+
+oracles.get('/earnings', async (c) => {
+  const agentId = await resolveAgentId(c)
+  if (!agentId) {
+    return error(c, 401, 'UNAUTHORIZED', 'Authentication required')
+  }
+
+  const db = createDb(c.env)
+
+  // Get oracle pool entry
+  const { data: poolEntry } = await db
+    .from('oracle_pool')
+    .select('id')
+    .eq('agent_id', agentId)
+    .single()
+
+  if (!poolEntry) {
+    return error(c, 404, 'NOT_FOUND', 'Agent is not in the oracle pool')
+  }
+
+  // Sum earnings by status
+  const { data: payments } = await db
+    .from('oracle_payments')
+    .select('amount_cents, status, funded_by')
+    .eq('oracle_id', poolEntry.id)
+
+  const earnings = {
+    totalCents: 0,
+    pendingCents: 0,
+    paidCents: 0,
+    paymentCount: 0,
+  }
+
+  if (payments) {
+    for (const p of payments) {
+      earnings.totalCents += p.amount_cents
+      earnings.paymentCount++
+      if (p.status === 'paid') {
+        earnings.paidCents += p.amount_cents
+      } else {
+        earnings.pendingCents += p.amount_cents
+      }
+    }
+  }
+
+  return success(c, earnings)
+})
+
 // ── GET /oracles/task/:id — public task status ────────────────────────────
 
 oracles.get('/task/:id', async (c) => {

@@ -38,6 +38,10 @@ export interface PolicyRow {
   created_at: string
   activated_at: string | null
   deprecated_at: string | null
+  // Phase 3: Marketplace fields
+  visibility: 'public' | 'private'
+  usage_count: number
+  billing_model: 'free' | 'platform' | 'creator'
 }
 
 export interface EscrowRow {
@@ -75,6 +79,8 @@ export interface EscrowRow {
   stripe_transfer_id: string | null
   buyer_payment_method_id: string | null
   seller_payment_method_id: string | null
+  // Phase 6: Oracle fee surcharge
+  oracle_fee_cents: number
 }
 
 export interface PaymentChannelRow {
@@ -197,5 +203,6 @@ export interface OraclePaymentRow {
   agent_id: string
   amount_cents: number
   status: 'pending' | 'paid'
+  funded_by: 'buyer_surcharge' | 'platform'
   created_at: string
 }

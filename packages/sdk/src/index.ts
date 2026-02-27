@@ -135,6 +135,8 @@ export interface Escrow {
   sellerFunded: boolean
   chainId: number | null
   txHash: string | null
+  // Phase 6: Oracle fee surcharge
+  oracleFeeCents: number
   // Phase 7: Stripe Connect per-escrow tracking
   stripeBuyerPiId: string | null
   stripeSellerCollateralPiId: string | null
@@ -364,6 +366,15 @@ export async function getPolicy(
   return (await res.json() as { data: Policy }).data
 }
 
+export async function listMarketplacePolicies(
+  options?: { apiUrl?: string }
+): Promise<Policy[]> {
+  const baseUrl = options?.apiUrl ?? DEFAULT_API_URL
+  const res = await fetch(`${baseUrl}/marketplace`)
+  if (!res.ok) throw new Error('Failed to fetch marketplace policies')
+  return (await res.json() as { data: Policy[] }).data
+}
+
 export async function getPolicyTemplates(
   options?: { apiUrl?: string }
 ): Promise<Policy[]> {
@@ -561,6 +572,10 @@ export class TrustProtocol {
     status: 'running'
   }> {
     return this.post(`/policies/${policyId}/refine`, params ?? {})
+  }
+
+  async useMarketplacePolicy(policyId: string): Promise<Policy> {
+    return this.post(`/marketplace/${policyId}/use`, {})
   }
 
   async refinementStatus(policyId: string): Promise<{
@@ -778,6 +793,15 @@ export class TrustProtocol {
 
   async getOracleTask(taskId: string): Promise<OracleTask> {
     return this.get(`/oracles/task/${taskId}`)
+  }
+
+  async getOracleEarnings(): Promise<{
+    totalCents: number
+    pendingCents: number
+    paidCents: number
+    paymentCount: number
+  }> {
+    return this.get('/oracles/earnings')
   }
 
   // ── Payment Channels (§8) ──────────────────────────────────────────────

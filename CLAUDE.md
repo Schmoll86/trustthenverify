@@ -52,8 +52,9 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 ## Stripe Integration
 - Account: FindSquad, Inc. (`acct_1ST8scJc7Iv6B67g`), live mode.
 - Live restricted key (`rk_live_`) with 7 Write permissions: Customers, Accounts, Account Links, Payment Intents, Payment Methods, Transfers, Refunds.
-- Stripe Connect: requires platform profile + ID verification before creating Express accounts.
+- **Stripe Connect: WORKING** — platform ID verified, Express accounts can be created in production.
 - Buyer-side (Stripe Customer creation) works in production.
+- Seller-side (Express connected accounts + onboarding) works in production.
 - Service: `packages/api/src/lib/stripe.ts` — raw `fetch()` to `api.stripe.com/v1`.
 
 ## Testing
@@ -61,11 +62,35 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - SDK: unit tests for crypto functions.
 - API: integration tests via `app.request()` with mock Supabase (`src/__tests__/helpers/mock-db.ts`).
 - E2E sandbox: `packages/e2e/` — tests against live sandbox (not in workspaces, manual run).
-- E2E production: `packages/e2e/live-full.test.ts` — 28 tests against `api.trustthenverify.com` with real ECDSA auth.
+- E2E production: `packages/e2e/live-full.test.ts` — 31 tests against `api.trustthenverify.com` with real ECDSA auth.
+- E2E phase completion: `packages/e2e/phase-completion.test.ts` — attestation query, argus refinement, oracle pool, marketplace (sandbox).
 - Run unit tests: `npm test --workspaces -- --run`
 - Run E2E sandbox: `cd packages/e2e && E2E_API_URL=https://sandbox.trustthenverify.com/v2 E2E_SANDBOX_KEY=<key> npx vitest --run`
 - Run E2E production: `cd packages/e2e && npx vitest --run live-full.test.ts`
 - E2E on-chain: `cd packages/e2e && npx vitest --run live-onchain.test.ts` — 19 tests against Base Sepolia (deploy + verify contracts).
+
+## Policy Marketplace
+- `GET /v2/marketplace` — list community-shared policies (public, no auth)
+- `POST /v2/marketplace/:id/use` — clone a marketplace policy for caller's use (auth required)
+- Policies have `visibility` (public/private), `usage_count`, `billing_model` (free/platform/creator) columns.
+- Billing is stubbed — DB records only, no real Stripe charges for marketplace usage yet.
+
+## Oracle Verification Enhancements
+- **Buyer surcharge:** `oracle_fee_cents` auto-set on escrow propose when `verification_method=oracle_consensus` (default $5, env `ORACLE_FEE_CENTS`). Fee split among voting oracles.
+- **Capability filtering:** `selectOracles()` matches task's `requiredCapabilities` to oracle pool capabilities. Falls back to any active oracle if insufficient matches.
+- **Oracle earnings:** `GET /v2/oracles/earnings` — oracles can query accumulated earnings (pending + paid). Actual payout deferred until Stripe Connect is used for oracle disbursement.
+- **Oracle payment tracking:** `funded_by` field on oracle_payments (`buyer_surcharge` or `platform`).
+
+## Auto-Refinement Cron
+- `handleAutoRefinement(env)` runs in `scheduled()` — sweeps policies with >3 disputed escrows and no active refinement, enqueues `argus_refine`.
+- Threshold configurable via `AUTO_REFINE_DISPUTE_THRESHOLD` env var.
+
+## Base Mainnet Deployment (Pending)
+- Contracts ready for Base mainnet deployment. Same codebase, different addresses.
+- Base mainnet USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- Requires: ETH on gateway wallet (`0x2299244F...`) + Basescan API key for verification.
+- Deploy command: `forge script script/Deploy.s.sol --rpc-url https://mainnet.base.org --broadcast --verify --chain-id 8453`
+- After deploy: update `BASE_RPC_URL`, `BASE_CHAIN_ID`, `ESCROW_FACTORY_ADDRESS` in wrangler.toml.
 
 ## Rate Limiting Behavior
 - KV-backed sliding window: 60 writes/min, 300 reads/min per agent.
