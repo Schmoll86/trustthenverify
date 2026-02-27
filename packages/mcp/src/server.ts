@@ -43,7 +43,7 @@ function tool(
 export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer {
   const server = new McpServer({
     name: 'trust-then-verify',
-    version: '0.1.0',
+    version: '0.2.0',
   })
 
   // 1. trust_search_agents
