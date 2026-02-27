@@ -650,7 +650,7 @@ export class TrustProtocol {
   async proposeEscrow(params: {
     seller: string
     amountCents: number
-    collateralRatio: number
+    collateralRatio?: number
     taskSpec: Record<string, unknown>
     policyId?: string
     verificationMethod?: VerificationMethod
@@ -663,7 +663,7 @@ export class TrustProtocol {
     return this.post('/escrow/propose', {
       seller: params.seller,
       amountCents: params.amountCents,
-      sellerCollateral: Math.round(params.amountCents * params.collateralRatio),
+      sellerCollateral: Math.round(params.amountCents * (params.collateralRatio ?? 0.5)),
       taskSpec: params.taskSpec,
       policyId: params.policyId,
       verificationMethod: params.verificationMethod ?? 'buyer_confirm',

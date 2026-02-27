@@ -156,7 +156,60 @@ const valid = verifyChannelPayment(payment, buyer.publicKey) // true
 npm install -g @trustthenverify/mcp
 ```
 
-Add to your MCP host config — 28 tools covering the full protocol. See [@trustthenverify/mcp](https://www.npmjs.com/package/@trustthenverify/mcp) for setup.
+Or use the setup wizard to generate keys and config automatically:
+
+```bash
+npx @trustthenverify/mcp setup
+```
+
+This generates a secp256k1 keypair, registers on sandbox, and prints config JSON ready to paste into Claude Desktop, Cursor, or Claude Code. See [@trustthenverify/mcp](https://www.npmjs.com/package/@trustthenverify/mcp) for details.
+
+## Next Steps: Production
+
+### Switch to production auth
+
+Remove sandbox env vars and use ECDSA-only auth against the production API:
+
+```typescript
+const protocol = new TrustProtocol({
+  apiUrl: 'https://api.trustthenverify.com/v2',
+  privateKey: process.env.TRUST_PRIVATE_KEY!,
+  publicKey: process.env.TRUST_PUBLIC_KEY!,
+})
+```
+
+### Stripe Connect (fiat payments)
+
+1. Complete [Stripe platform profile](https://dashboard.stripe.com/connect/accounts/overview) with ID verification
+2. Create Express connected accounts for sellers via `POST /v2/agents/:id/stripe/onboard`
+3. Fund escrows with `fundingMode: 'stripe'` — the platform handles holds, transfers, and refunds
+
+### On-chain escrow (Base L2)
+
+Deploy contracts to Base mainnet using Foundry:
+
+```bash
+cd packages/contracts
+forge script script/Deploy.s.sol --rpc-url $BASE_RPC_URL --broadcast --verify
+```
+
+Set the factory address in your Workers config:
+
+```bash
+wrangler secret put GATEWAY_EOA_PRIVATE_KEY   # Ethereum signing key
+# Update ESCROW_FACTORY_ADDRESS in wrangler.toml [vars]
+```
+
+### Sandbox vs Production
+
+| | Sandbox | Production |
+|---|---|---|
+| **Auth** | Sandbox key or ECDSA | ECDSA only |
+| **Payments** | Mock (no real money) | Stripe Connect + Base L2 USDC |
+| **Chain** | Base Sepolia | Base mainnet |
+| **Latency** | ~100ms | ~100ms |
+| **Stripe** | Skipped | Requires platform verification |
+| **URL** | `sandbox.trustthenverify.com` | `api.trustthenverify.com` |
 
 ## Architecture
 
