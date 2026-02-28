@@ -1191,6 +1191,7 @@ GET    /policies/templates             — browse pre-refined policy templates
 POST   /escrow/propose                 — propose escrow terms + policy_id
 POST   /escrow/:id/accept              — accept terms, both deposit
 GET    /escrow/:id                     — status
+GET    /agents/:pubkey/escrows         — list agent's escrows (?status, ?role, ?cursor)
 POST   /escrow/:id/deliver             — submit deliverable (triggers verification)
 POST   /escrow/:id/confirm             — buyer manual confirm (buyer_confirm method only)
 POST   /escrow/:id/dispute             — initiate dispute
@@ -1211,6 +1212,9 @@ POST   /disputes/:id/ruling            — arbitrator submits ruling
 POST   /channels                       — register a payment channel
 GET    /channels/:address              — get channel details (parties only)
 POST   /channels/:address/close        — record channel closure
+
+# Webhooks
+POST   /webhooks/stripe                — Stripe webhook (payment_intent.payment_failed, account.updated)
 ```
 
 **Spawn mechanics (`POST /agents/:pubkey/spawn`):**
@@ -1668,7 +1672,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–8 complete.** 501 unit tests (452 API + 36 SDK + 13 MCP) + 49 Foundry + 50 E2E tests. 37 MCP tools. Stripe SetupIntent + onboarding UI live. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–8 complete.** 520 unit tests (471 API + 36 SDK + 13 MCP) + 49 Foundry + 50+ E2E tests. 37 MCP tools. Stripe webhook live (`POST /webhooks/stripe`). Oracle payout cron via Stripe Connect. List-escrows route (`GET /agents/:pubkey/escrows`). Stripe SetupIntent + onboarding UI live. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Repo public at github.com/Schmoll86/TrustThenVerify. npm packages `@trustthenverify/sdk@0.2.0` and `@trustthenverify/mcp@0.2.0` published. Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
 
 ---
 

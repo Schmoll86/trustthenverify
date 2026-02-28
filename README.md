@@ -170,8 +170,9 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 
 The system is **production-ready**. All features implemented and verified:
 
-- **500+ unit tests** (449 API + 36 SDK + 13 MCP) + 49 Foundry + 50 E2E tests
+- **520+ unit tests** (471 API + 36 SDK + 13 MCP) + 49 Foundry + 50+ E2E tests
 - **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
+- **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
 - **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet
 - **37 MCP tools** for AI agent integration
 - **Onboarding UI:** [trustthenverify.com/onboard](https://trustthenverify.com/onboard)
@@ -192,7 +193,7 @@ const protocol = new TrustProtocol({
 |---|---|---|
 | **Auth** | Sandbox key or ECDSA | ECDSA only |
 | **Payments** | Mock (no real money) | Stripe Connect + Base L2 USDC |
-| **Chain** | Base Sepolia | Base Sepolia (mainnet pending) |
+| **Chain** | Base Sepolia | Base Mainnet + Base Sepolia |
 | **Latency** | ~100ms | ~100ms |
 | **Stripe** | Skipped | Stripe Connect (Express accounts) |
 | **URL** | `sandbox.trustthenverify.com` | `api.trustthenverify.com` |
@@ -249,7 +250,7 @@ Natural language requirements are translated into machine-verifiable constraints
 ### Setup
 
 ```bash
-git clone https://github.com/Schmoll86/trustthenverify.git
+git clone https://github.com/Schmoll86/TrustThenVerify.git
 cd trustthenverify
 npm install
 ```
@@ -289,6 +290,7 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 wrangler secret put GATEWAY_PRIVATE_KEY
 wrangler secret put SANDBOX_KEYS
 wrangler secret put STRIPE_SECRET_KEY
+wrangler secret put STRIPE_WEBHOOK_SECRET
 
 # Deploy
 cd packages/api && wrangler deploy
@@ -340,6 +342,7 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/escrow/:id/deliver` | POST | Signed | Submit deliverable |
 | `/escrow/:id/confirm` | POST | Signed | Buyer manual confirm |
 | `/escrow/:id/dispute` | POST | Signed | Dispute (default: LLM arbitration; opt-in: burn) |
+| `/agents/:pubkey/escrows` | GET | Signed | List agent's escrows (?status, ?role, ?cursor) |
 | `/disputes/:id` | GET | Signed | Get dispute status + ruling |
 | `/attestations` | POST | Signed | Publish attestation |
 | `/attestations/:pubkey` | GET | None | Query attestations |
@@ -360,6 +363,7 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/agents/:pubkey/stripe/connect` | POST | Signed | Create Express account (seller KYC) |
 | `/agents/:pubkey/stripe/status` | GET | Signed | Check Stripe onboarding status |
 | `/agents/:pubkey/stripe/payment-method` | POST | Signed | Attach payment method |
+| `/webhooks/stripe` | POST | Stripe sig | Stripe webhook (payment failures, account updates) |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.
 

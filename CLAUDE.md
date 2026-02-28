@@ -36,7 +36,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Prompts: `packages/api/src/lib/arbitration-prompts.ts`
 
 ## On-Chain Escrow (Base L2)
-- **Status:** LIVE on Base Sepolia. Factory deploys EscrowInstance contracts via API. Verified end-to-end.
+- **Status:** LIVE on Base Sepolia + Base Mainnet. Factory deploys EscrowInstance contracts via API. Verified end-to-end.
 - **Addresses:** Factory `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`, Gateway/Treasury `0x2299244F6c99E59A1f8197509030428030aaaff9`, USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`.
 - **Key fallback:** `GATEWAY_EOA_PRIVATE_KEY` falls back to `GATEWAY_PRIVATE_KEY` if not set. Both derive to `0x2299244F...`.
 - **Hashing:** All Ethereum hashing uses `keccak_256` from `@noble/hashes/sha3.js` — function selectors, message hashes, address derivation, tx signing.
@@ -56,6 +56,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Buyer-side (Stripe Customer creation) works in production.
 - Seller-side (Express connected accounts + onboarding) works in production.
 - SetupIntents: `POST /v2/agents/:pubkey/stripe/setup-intent` — creates SetupIntent for Stripe Elements card collection. Requires `Setup Intents: Write` permission on restricted key.
+- Webhook: `POST /webhooks/stripe` — handles `payment_intent.payment_failed` and `account.updated` events. Signature verified via `STRIPE_WEBHOOK_SECRET`.
 - Publishable key: `pk_live_51ST8sc...` embedded in onboarding page (client-side safe).
 - Service: `packages/api/src/lib/stripe.ts` — raw `fetch()` to `api.stripe.com/v1`.
 
@@ -64,7 +65,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - SDK: unit tests for crypto functions.
 - API: integration tests via `app.request()` with mock Supabase (`src/__tests__/helpers/mock-db.ts`).
 - E2E sandbox: `packages/e2e/` — tests against live sandbox (not in workspaces, manual run).
-- E2E production: `packages/e2e/live-full.test.ts` — 31 tests against `api.trustthenverify.com` with real ECDSA auth.
+- E2E production: `packages/e2e/live-full.test.ts` — 31+ tests against `api.trustthenverify.com` with real ECDSA auth.
 - E2E phase completion: `packages/e2e/phase-completion.test.ts` — attestation query, argus refinement, oracle pool, marketplace (sandbox).
 - Run unit tests: `npm test --workspaces -- --run`
 - Run E2E sandbox: `cd packages/e2e && E2E_API_URL=https://sandbox.trustthenverify.com/v2 E2E_SANDBOX_KEY=<key> npx vitest --run`
@@ -80,19 +81,18 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 ## Oracle Verification Enhancements
 - **Buyer surcharge:** `oracle_fee_cents` auto-set on escrow propose when `verification_method=oracle_consensus` (default $5, env `ORACLE_FEE_CENTS`). Fee split among voting oracles.
 - **Capability filtering:** `selectOracles()` matches task's `requiredCapabilities` to oracle pool capabilities. Falls back to any active oracle if insufficient matches.
-- **Oracle earnings:** `GET /v2/oracles/earnings` — oracles can query accumulated earnings (pending + paid). Actual payout deferred until Stripe Connect is used for oracle disbursement.
+- **Oracle earnings:** `GET /v2/oracles/earnings` — oracles can query accumulated earnings (pending + paid).
+- **Oracle payout cron:** `handleOraclePayouts()` runs in `scheduled()` — uses `transferToConnectedAccount` to pay out oracle earnings via Stripe Connect.
 - **Oracle payment tracking:** `funded_by` field on oracle_payments (`buyer_surcharge` or `platform`).
 
-## Auto-Refinement Cron
-- `handleAutoRefinement(env)` runs in `scheduled()` — sweeps policies with >3 disputed escrows and no active refinement, enqueues `argus_refine`.
-- Threshold configurable via `AUTO_REFINE_DISPUTE_THRESHOLD` env var.
+## Scheduled Crons
+- `handleAutoRefinement(env)` runs in `scheduled()` — sweeps policies with >3 disputed escrows and no active refinement, enqueues `argus_refine`. Threshold configurable via `AUTO_REFINE_DISPUTE_THRESHOLD` env var.
+- `handleOraclePayouts(env)` runs in `scheduled()` — pays out pending oracle earnings to their Stripe Connect accounts via `transferToConnectedAccount`.
 
-## Base Mainnet Deployment (Pending)
-- Contracts ready for Base mainnet deployment. Same codebase, different addresses.
-- Base mainnet USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- Requires: ETH on gateway wallet (`0x2299244F...`) + Basescan API key for verification.
-- Deploy command: `forge script script/Deploy.s.sol --rpc-url https://mainnet.base.org --broadcast --verify --chain-id 8453`
-- After deploy: update `BASE_RPC_URL`, `BASE_CHAIN_ID`, `ESCROW_FACTORY_ADDRESS` in wrangler.toml.
+## Base Mainnet Deployment
+- **Status:** LIVE on Base Mainnet. Factory deployed at same deterministic address `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`, verified on Basescan.
+- Base mainnet USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (Circle official).
+- Production config: `BASE_RPC_URL` (Alchemy), `BASE_CHAIN_ID=8453`, `ESCROW_FACTORY_ADDRESS` in wrangler.toml vars.
 
 ## Rate Limiting Behavior
 - KV-backed sliding window: 60 writes/min, 300 reads/min per agent.
