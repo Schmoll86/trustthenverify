@@ -3,7 +3,7 @@
 > **Version:** 2.1-draft
 > **Status:** Proposal
 > **Purpose:** A trust protocol for autonomous AI agents combining economic commitment (escrow), formal policy verification (automated reasoning), adversarial policy refinement, and a future upgrade path to cryptographic execution proofs (zkML).
-> **Last Updated:** 2026-02-25
+> **Last Updated:** 2026-02-28
 > **Theoretical Foundation:** Benno, W. (2026). "Agentic Trust: Succinctly Verifiable Automated Reasoning for the Principal-Agent Problem in Autonomous Commerce." ICME Labs.
 
 ---
@@ -1612,7 +1612,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** Policies are adversarially tested before deployment. Policy gaps caught before they become exploits. Marketplace enables cost sharing across developers.
 
-### Phase 4 — On-Chain Escrow (3–4 weeks)
+### Phase 4 — On-Chain Escrow (3–4 weeks) ✅
 33. Base L2 escrow smart contract (factory + instance)
 34. USDC deposit/release logic
 35. `gatewayRelease()` in contract (Gateway signs, contract verifies)
@@ -1620,7 +1620,7 @@ Each phase is independently deployable and produces a usable system.
 37. Dual-mode: Stripe or on-chain, per transaction
 38. Payment channels for micro-transactions
 
-**Deliverable:** Trustless on-chain escrow for agents that want it.
+**Deliverable:** Trustless on-chain escrow for agents that want it. Deployed to Base Sepolia + Base Mainnet. Factory at `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`, verified on Basescan. 19 on-chain E2E tests passing (real contract deployments on Base Mainnet).
 
 ### Phase 5 — Attestations (1–2 weeks) ✅
 39. Attestation signing and Nostr publishing
@@ -1672,7 +1672,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–8 complete.** 520 unit tests (471 API + 36 SDK + 13 MCP) + 49 Foundry + 50+ E2E tests. 37 MCP tools. Stripe webhook live (`POST /webhooks/stripe`). Oracle payout cron via Stripe Connect. List-escrows route (`GET /agents/:pubkey/escrows`). Stripe SetupIntent + onboarding UI live. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Repo public at github.com/Schmoll86/TrustThenVerify. npm packages `@trustthenverify/sdk@0.2.0` and `@trustthenverify/mcp@0.2.0` published. Phase 8 depends on external zkML maturation. Phase 9 (Arbitration) implemented as LLM-based single-round arbitration.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–9 complete** (except Phase 8 zkML, pending external technology maturation). 520 unit tests (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 production API + 19 on-chain Base Mainnet + 33 Claude agent-driven scenarios). 41 MCP tools. Stripe webhooks live. Oracle payout cron via Stripe Connect. Claude agent E2E: 8 autonomous scenarios (happy path, on-chain contract deployment, dispute/arbitration, oracle consensus, policy lifecycle, marketplace, payment channels, Stripe onboarding) — all driven by real Claude models (Sonnet 4.6, Haiku 4.5, Sonnet 4.5) making real API calls. Interactive quickstart, API docs, onboarding UI live at trustthenverify.com. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Repo public at github.com/Schmoll86/TrustThenVerify. npm packages `@trustthenverify/sdk@0.2.0` and `@trustthenverify/mcp@0.2.0` published.
 
 ---
 

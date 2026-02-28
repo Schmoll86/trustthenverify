@@ -37,7 +37,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 
 ## On-Chain Escrow (Base L2)
 - **Status:** LIVE on Base Sepolia + Base Mainnet. Factory deploys EscrowInstance contracts via API. Verified end-to-end.
-- **Addresses:** Factory `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`, Gateway/Treasury `0x2299244F6c99E59A1f8197509030428030aaaff9`, USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`.
+- **Addresses:** Factory `0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e`, Gateway/Treasury `0x2299244F6c99E59A1f8197509030428030aaaff9`, USDC (Sepolia) `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, USDC (Mainnet) `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
 - **Key fallback:** `GATEWAY_EOA_PRIVATE_KEY` falls back to `GATEWAY_PRIVATE_KEY` if not set. Both derive to `0x2299244F...`.
 - **Hashing:** All Ethereum hashing uses `keccak_256` from `@noble/hashes/sha3.js` — function selectors, message hashes, address derivation, tx signing.
 - **Noble secp256k1 v3 recovery:** `format: 'recovered'` returns `recovery(1) || r(32) || s(32)` — recovery byte is FIRST. Ethereum convention is `r || s || v` — must reformat after signing.
@@ -65,12 +65,15 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - SDK: unit tests for crypto functions.
 - API: integration tests via `app.request()` with mock Supabase (`src/__tests__/helpers/mock-db.ts`).
 - E2E sandbox: `packages/e2e/` — tests against live sandbox (not in workspaces, manual run).
-- E2E production: `packages/e2e/live-full.test.ts` — 31+ tests against `api.trustthenverify.com` with real ECDSA auth.
+- E2E production: `packages/e2e/live-full.test.ts` — 31 tests against `api.trustthenverify.com` with real ECDSA auth.
+- E2E on-chain: `packages/e2e/live-onchain.test.ts` — 19 tests against Base Mainnet (deploy + verify contracts on-chain).
+- E2E agents: `packages/e2e/live-agents.test.ts` — 33 tests, 8 scenarios driven by Claude models (Sonnet 4.6, Haiku 4.5, Sonnet 4.5) autonomously calling the API. Requires `ANTHROPIC_API_KEY` in `packages/e2e/.env`.
 - E2E phase completion: `packages/e2e/phase-completion.test.ts` — attestation query, argus refinement, oracle pool, marketplace (sandbox).
 - Run unit tests: `npm test --workspaces -- --run`
-- Run E2E sandbox: `cd packages/e2e && E2E_API_URL=https://sandbox.trustthenverify.com/v2 E2E_SANDBOX_KEY=<key> npx vitest --run`
 - Run E2E production: `cd packages/e2e && npx vitest --run live-full.test.ts`
-- E2E on-chain: `cd packages/e2e && npx vitest --run live-onchain.test.ts` — 19 tests against Base Sepolia (deploy + verify contracts).
+- Run E2E on-chain: `cd packages/e2e && npx vitest --run live-onchain.test.ts`
+- Run E2E agents: `cd packages/e2e && npx vitest --run live-agents.test.ts` (~$0.35/run, ~3.5min)
+- Run E2E sandbox: `cd packages/e2e && E2E_API_URL=https://sandbox.trustthenverify.com/v2 npx vitest --run`
 
 ## Policy Marketplace
 - `GET /v2/marketplace` — list community-shared policies (public, no auth)

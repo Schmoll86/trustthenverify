@@ -230,11 +230,12 @@ describe('Live On-Chain — Base Mainnet', { timeout: 120_000 }, () => {
     console.log('Contract amount:', amount.toString(), 'USDC units (0.01 USDC)')
   })
 
-  it('contract collateral matches escrow (0.5 cents = 0.005 USDC = 5000)', async () => {
+  it('contract collateral matches escrow (50 cents = 0.50 USDC = 500000)', async () => {
     const collateralHex = await ethCall(contractAddress, SELECTORS.collateral)
     const collateral = decodeUint256(collateralHex)
-    expect(collateral).toBe(5_000n)
-    console.log('Contract collateral:', collateral.toString(), 'USDC units (0.005 USDC)')
+    // sellerCollateral: 50 cents * 10000 = 500,000 (6-decimal USDC)
+    expect(collateral).toBe(500_000n)
+    console.log('Contract collateral:', collateral.toString(), 'USDC units (0.50 USDC)')
   })
 
   it('contract uses Base Mainnet USDC', async () => {
