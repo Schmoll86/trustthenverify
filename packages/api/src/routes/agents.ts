@@ -4,7 +4,7 @@ import { createDb } from '../lib/db'
 import { snakeToCamel } from '../lib/case'
 import { success, error } from '../lib/response'
 import type { Agent } from '@trustthenverify/sdk'
-import type { AgentRow } from '../lib/types'
+import type { AgentRow, EscrowRow } from '../lib/types'
 import type { StripeService } from '../lib/stripe'
 import { RealStripeService } from '../lib/stripe'
 
@@ -158,6 +158,79 @@ agents.get('/:pubkey', async (c) => {
   }
 
   return success(c, snakeToCamel<Agent>(row))
+})
+
+// GET /agents/:pubkey/escrows — list escrows for an agent
+agents.get('/:pubkey/escrows', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const db = createDb(c.env)
+
+  // Verify agent exists
+  const { data: agent } = await db
+    .from('agents')
+    .select('id')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const agentId = (agent as { id: string }).id
+  const status = c.req.query('status')
+  const role = c.req.query('role') // 'buyer' | 'seller' | undefined (both)
+  const cursor = c.req.query('cursor')
+
+  let query = db.from('escrows').select('*')
+
+  // Filter by role
+  if (role === 'buyer') {
+    query = query.eq('buyer_id', agentId)
+  } else if (role === 'seller') {
+    query = query.eq('seller_id', agentId)
+  } else {
+    query = query.or(`buyer_id.eq.${agentId},seller_id.eq.${agentId}`)
+  }
+
+  // Filter by status
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  // Keyset pagination
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(atob(cursor))
+      query = query.or(`created_at.lt.${decoded.created_at},and(created_at.eq.${decoded.created_at},id.gt.${decoded.id})`)
+    } catch {
+      // Invalid cursor, ignore
+    }
+  }
+
+  query = query.order('created_at', { ascending: false }).limit(20)
+
+  const { data: rows, error: dbError } = await query
+
+  if (dbError) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to list escrows')
+  }
+
+  const escrows = (rows || []).map((r: EscrowRow) => snakeToCamel(r))
+  let nextCursor: string | null = null
+
+  if (rows && rows.length === 20) {
+    const last = rows[rows.length - 1] as EscrowRow
+    nextCursor = btoa(JSON.stringify({ created_at: last.created_at, id: last.id }))
+  }
+
+  return c.json({
+    data: escrows,
+    meta: {
+      requestId: crypto.randomUUID(),
+      count: escrows.length,
+      cursor: nextCursor,
+    },
+  })
 })
 
 // POST /agents/:pubkey/verify — keypair verification challenge

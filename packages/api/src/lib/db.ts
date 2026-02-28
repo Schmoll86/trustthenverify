@@ -30,6 +30,7 @@ export interface Env {
   RATE_LIMIT_KV?: KVNamespace
   // Arbitration
   ARBITRATION_MODEL?: string           // default: 'google/gemini-2.5-flash'
+  STRIPE_WEBHOOK_SECRET?: string
 }
 
 /** Create a Supabase client per-request from Workers env bindings. */

@@ -12,7 +12,8 @@ import { disputes } from './routes/disputes'
 import { oracles } from './routes/oracles'
 import { channels } from './routes/channels'
 import { marketplace } from './routes/marketplace'
-import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement } from './cron/escrow-timeout'
+import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement, handleOraclePayouts } from './cron/escrow-timeout'
+import { webhooks } from './routes/webhooks'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 import { handleOracleDispatch, type OracleQueueMessage } from './queue/oracle-consumer'
 
@@ -39,6 +40,9 @@ app.use('*', loggingMiddleware)
 app.get('/', (c) => c.json({ name: 'TrustThenVerify API', version: '2.0.0', spec: 'SPEC-v2' }))
 app.get('/v2/health', (c) => c.json({ status: 'ok', version: '2.0.0' }))
 
+// ── Webhooks (before auth — authenticates via Stripe signature) ──────────
+app.route('/webhooks', webhooks)
+
 // ── Auth middleware (applies to all /v2 routes) ──────────────────────────────
 app.use('/v2/*', authMiddleware)
 
@@ -63,6 +67,7 @@ export default {
     await handleOnchainFunding(env)
     await handleOracleTimeout(env)
     await handleAutoRefinement(env)
+    await handleOraclePayouts(env)
   },
   async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage>, env: Env) {
     for (const msg of batch.messages) {

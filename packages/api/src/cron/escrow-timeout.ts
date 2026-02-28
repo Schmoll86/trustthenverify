@@ -8,7 +8,7 @@ import { RealStripeService } from '../lib/stripe'
 import type { StripeService } from '../lib/stripe'
 import type { OnchainService } from '../lib/onchain'
 import { RealOnchainService } from '../lib/onchain'
-import type { EscrowRow, OracleTaskRow } from '../lib/types'
+import type { EscrowRow, OracleTaskRow, OraclePaymentRow, AgentRow } from '../lib/types'
 import { RealOracleService } from '../lib/oracle-service'
 import type { OracleService } from '../lib/oracle-service'
 import { checkConsensus } from '../lib/oracle-service'
@@ -267,6 +267,75 @@ export async function handleAutoRefinement(
   }
 
   return { enqueued }
+}
+
+/** Disburse pending oracle payments to connected accounts. */
+export async function handleOraclePayouts(
+  env: Env,
+  stripe?: StripeService,
+): Promise<{ paid: number; skipped: number }> {
+  const db = createDb(env)
+  const stripeService = stripe ?? new RealStripeService(env.STRIPE_SECRET_KEY)
+
+  const { data: pending } = await db
+    .from('oracle_payments')
+    .select('*')
+    .eq('status', 'pending')
+    .limit(50)
+
+  if (!pending || pending.length === 0) {
+    return { paid: 0, skipped: 0 }
+  }
+
+  let paid = 0
+  let skipped = 0
+
+  for (const payment of pending as OraclePaymentRow[]) {
+    // Look up the oracle's agent to get their connected account
+    const { data: agent } = await db
+      .from('agents')
+      .select('*')
+      .eq('id', payment.agent_id)
+      .single()
+
+    if (!agent) {
+      skipped++
+      continue
+    }
+
+    const agentRow = agent as AgentRow
+
+    if (!agentRow.stripe_connected_account_id || !agentRow.stripe_onboarding_complete) {
+      // Agent hasn't completed Connect onboarding — skip, retry next tick
+      skipped++
+      continue
+    }
+
+    try {
+      await stripeService.transferToConnectedAccount({
+        amountCents: payment.amount_cents,
+        connectedAccountId: agentRow.stripe_connected_account_id,
+        metadata: {
+          type: 'oracle_payout',
+          oracle_payment_id: payment.id,
+          oracle_task_id: payment.oracle_task_id,
+        },
+      })
+
+      await db
+        .from('oracle_payments')
+        .update({ status: 'paid' })
+        .eq('id', payment.id)
+
+      paid++
+    } catch (e) {
+      // Log but don't fail the batch — retry next cron tick
+      console.error(`Oracle payout failed for payment ${payment.id}:`, e)
+      skipped++
+    }
+  }
+
+  return { paid, skipped }
 }
 
 function createOnchainService(env: Env): OnchainService {

@@ -70,6 +70,11 @@ export function createMockStripe(): StripeService & { calls: StripeCall[]; reset
     async burnFunds(params) {
       calls.push({ method: 'burnFunds', params })
     },
+    async transferToConnectedAccount(params) {
+      counter++
+      calls.push({ method: 'transferToConnectedAccount', params })
+      return { transferId: `tr_oracle_mock_${counter}` }
+    },
     async refundBuyerAndBurnCollateral(params) {
       calls.push({ method: 'refundBuyerAndBurnCollateral', params })
     },

@@ -76,6 +76,13 @@ export interface StripeService {
     stripeSellerCollateralPiId?: string
   }): Promise<void>
 
+  /** Transfer funds to a connected account (standalone, no source_transaction). */
+  transferToConnectedAccount(params: {
+    amountCents: number
+    connectedAccountId: string
+    metadata?: Record<string, string>
+  }): Promise<{ transferId: string }>
+
   /** Refund buyer, burn seller collateral (timeout/fail scenario). */
   refundBuyerAndBurnCollateral(params: {
     stripeBuyerPiId: string
@@ -339,6 +346,25 @@ export class RealStripeService implements StripeService {
         'metadata[burned_at]': new Date().toISOString(),
       })
     }
+  }
+
+  async transferToConnectedAccount(params: {
+    amountCents: number
+    connectedAccountId: string
+    metadata?: Record<string, string>
+  }): Promise<{ transferId: string }> {
+    const body: Record<string, string> = {
+      amount: String(params.amountCents),
+      currency: 'usd',
+      destination: params.connectedAccountId,
+    }
+    if (params.metadata) {
+      for (const [k, v] of Object.entries(params.metadata)) {
+        body[`metadata[${k}]`] = v
+      }
+    }
+    const result = await this.stripePost('/transfers', body)
+    return { transferId: result.id as string }
   }
 
   async refundBuyerAndBurnCollateral(params: {

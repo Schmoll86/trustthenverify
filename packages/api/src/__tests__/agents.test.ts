@@ -180,6 +180,99 @@ describe('GET /v2/agents/search — search', () => {
   })
 })
 
+describe('GET /v2/agents/:pubkey/escrows — list escrows', () => {
+  beforeEach(() => {
+    mockDb = createMockDb()
+    mockDb.seedTable('agents', [{
+      id: 'agent-buyer',
+      public_key: 'pk_buyer_test',
+      endpoint: null,
+      name: 'Buyer Agent',
+      capabilities: [],
+      metadata: {},
+      parent_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+      last_seen_at: '2026-01-01T00:00:00Z',
+    }])
+    mockDb.seedTable('escrows', [
+      {
+        id: 'e1', buyer_id: 'agent-buyer', seller_id: 'other-seller',
+        status: 'active', amount_cents: 5000, created_at: '2026-02-01T00:00:00Z',
+      },
+      {
+        id: 'e2', buyer_id: 'other-buyer', seller_id: 'agent-buyer',
+        status: 'completed', amount_cents: 3000, created_at: '2026-02-02T00:00:00Z',
+      },
+      {
+        id: 'e3', buyer_id: 'other-buyer', seller_id: 'other-seller',
+        status: 'active', amount_cents: 1000, created_at: '2026-02-03T00:00:00Z',
+      },
+    ])
+  })
+
+  it('returns escrows where agent is buyer or seller', async () => {
+    const res = await app.request('/v2/agents/pk_buyer_test/escrows', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: Array<{ id: string }>; meta: { count: number } }
+    expect(json.data.length).toBe(2)
+    expect(json.meta.count).toBe(2)
+  })
+
+  it('filters by role=buyer', async () => {
+    const res = await app.request('/v2/agents/pk_buyer_test/escrows?role=buyer', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: Array<{ id: string }> }
+    expect(json.data.length).toBe(1)
+    expect(json.data[0].id).toBe('e1')
+  })
+
+  it('filters by role=seller', async () => {
+    const res = await app.request('/v2/agents/pk_buyer_test/escrows?role=seller', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: Array<{ id: string }> }
+    expect(json.data.length).toBe(1)
+    expect(json.data[0].id).toBe('e2')
+  })
+
+  it('filters by status', async () => {
+    const res = await app.request('/v2/agents/pk_buyer_test/escrows?status=active', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: Array<{ id: string }> }
+    expect(json.data.length).toBeGreaterThanOrEqual(1)
+    // Should only include active escrows involving this agent
+    for (const escrow of json.data) {
+      expect(escrow.id).not.toBe('e2') // e2 is completed
+    }
+  })
+
+  it('returns 404 for unknown pubkey', async () => {
+    const res = await app.request('/v2/agents/unknown_pubkey/escrows', { method: 'GET' }, env)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns empty array when no escrows', async () => {
+    mockDb.seedTable('agents', [{
+      id: 'agent-lonely',
+      public_key: 'pk_lonely',
+      endpoint: null, name: 'Lonely', capabilities: [], metadata: {},
+      parent_id: null,
+      created_at: '2026-01-01T00:00:00Z',
+      last_seen_at: '2026-01-01T00:00:00Z',
+    }])
+
+    const res = await app.request('/v2/agents/pk_lonely/escrows', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: unknown[]; meta: { count: number } }
+    expect(json.data).toEqual([])
+    expect(json.meta.count).toBe(0)
+  })
+})
+
 describe('POST /v2/agents/:pubkey/verify', () => {
   beforeEach(() => {
     mockDb = createMockDb()

@@ -125,6 +125,11 @@ export function createMockDb() {
               return false
             }
           }
+          const eqMatch = part.match(/^(\w+)\.eq\.(.+)$/)
+          if (eqMatch) {
+            const [, field, value] = eqMatch
+            return (r: Row) => String(r[field]) === value
+          }
           return () => true
         })
         filteredRows = filteredRows.filter((r) => matchers.some((m) => m(r)))
