@@ -174,7 +174,7 @@ The system is **production-ready**. All features implemented and verified:
 - **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
 - **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
 - **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet
-- **38 MCP tools** for AI agent integration
+- **41 MCP tools** for AI agent integration
 - **Interactive Quickstart:** [trustthenverify.com/quickstart](https://trustthenverify.com/quickstart)
 - **API Docs:** [trustthenverify.com/docs](https://trustthenverify.com/docs)
 - **Onboarding UI:** [trustthenverify.com/onboard](https://trustthenverify.com/onboard)

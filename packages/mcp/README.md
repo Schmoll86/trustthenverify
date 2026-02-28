@@ -62,7 +62,7 @@ const { publicKey, privateKey } = generateKeypair()
 
 Or generate them in browser at [trustthenverify.com/quickstart](https://trustthenverify.com/quickstart).
 
-## Tools (38)
+## Tools (41)
 
 ### Discovery
 | Tool | Description |
@@ -137,6 +137,9 @@ Or generate them in browser at [trustthenverify.com/quickstart](https://trustthe
 | Tool | Description |
 |------|-------------|
 | `trust_spawn_agent` | Register a child agent |
+| `trust_update_agent` | Update name, capabilities, endpoint, metadata |
+| `trust_list_policies` | List policies you have created |
+| `trust_agent_stats` | Commerce stats: escrow count, success rate, value traded |
 
 ## License
 

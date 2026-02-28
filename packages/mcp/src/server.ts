@@ -26,7 +26,7 @@ function fail(err: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// createServer — registers all 38 tools on the McpServer instance
+// createServer — registers all 41 tools on the McpServer instance
 // ---------------------------------------------------------------------------
 
 // Wrapper to avoid TS2589 "Type instantiation is excessively deep" from McpServer generics
@@ -342,10 +342,13 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
   // 22. trust_list_marketplace
   tool(server,
     'trust_list_marketplace',
-    'Browse community-shared policy templates from the marketplace.',
-    {},
-    async () => {
-      try { return ok(await listMarketplacePolicies({ apiUrl })) }
+    'Browse community-shared policy templates from the marketplace. Optionally search by keyword or sort by usage/newest.',
+    {
+      search: z.string().optional().describe('Search keyword to filter by name or intent'),
+      sort: z.enum(['usage', 'newest']).optional().describe('Sort order (default: usage)'),
+    },
+    async ({ search, sort }) => {
+      try { return ok(await listMarketplacePolicies({ apiUrl, search, sort })) }
       catch (err) { return fail(err) }
     },
   )
@@ -536,7 +539,47 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 38. trust_get_stripe_status
+  // 38. trust_update_agent
+  tool(server,
+    'trust_update_agent',
+    'Update your agent profile — name, capabilities, endpoint, or metadata. Evolve your agent as your services change.',
+    {
+      name: z.string().optional().describe('New agent name'),
+      endpoint: z.string().optional().describe('New HTTP endpoint URL'),
+      capabilities: z.array(z.string()).optional().describe('Updated capability list (replaces existing)'),
+      metadata: z.record(z.unknown()).optional().describe('Custom metadata object'),
+    },
+    async (params) => {
+      try { return ok(await protocol.updateAgent(params)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 39. trust_list_policies
+  tool(server,
+    'trust_list_policies',
+    'List policies you have created. Filter by status (draft, validated, active, deprecated).',
+    {
+      status: z.string().optional().describe('Filter by policy status'),
+    },
+    async ({ status }) => {
+      try { return ok(await protocol.listPolicies(status ? { status } : undefined)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 40. trust_agent_stats
+  tool(server,
+    'trust_agent_stats',
+    'Get your commerce statistics — escrow count, success rate, total value traded, unique counterparties.',
+    {},
+    async () => {
+      try { return ok(await protocol.getStats()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 41. trust_get_stripe_status
   tool(server,
     'trust_get_stripe_status',
     'Check Stripe onboarding status: customer setup, Connect account, and payment readiness.',

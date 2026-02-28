@@ -23,15 +23,30 @@ type AppEnv = {
 export const marketplace = new Hono<AppEnv>()
 
 // GET /marketplace — list community-shared policy templates
+// Query params: ?search= (name/intent substring), ?sort=usage|newest (default: usage)
 marketplace.get('/', async (c) => {
   const db = createDb(c.env)
+  const search = c.req.query('search')
+  const sort = c.req.query('sort') || 'usage'
 
-  const { data: rows, error: dbError } = await db
+  let query = db
     .from('policies')
     .select('*')
     .eq('status', 'active')
     .eq('visibility', 'public')
-    .order('usage_count', { ascending: false })
+
+  // Text search on name and intent
+  if (search && search.length >= 2) {
+    query = query.or(`name.ilike.%${search}%,intent.ilike.%${search}%`)
+  }
+
+  if (sort === 'newest') {
+    query = query.order('created_at', { ascending: false })
+  } else {
+    query = query.order('usage_count', { ascending: false })
+  }
+
+  const { data: rows, error: dbError } = await query
 
   if (dbError) {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to fetch marketplace policies')

@@ -58,7 +58,7 @@ const released = await buyer.confirmDelivery(escrow.id)
 // released.status === 'released'
 ```
 
-## MCP Server (38 Tools)
+## MCP Server (41 Tools)
 
 ```bash
 npm install @trustthenverify/mcp
@@ -76,7 +76,7 @@ Works with Claude Desktop, Cursor, Claude Code, and any MCP host.
 - Oracle Pool: trust_join_oracle_pool, trust_withdraw_oracle_pool, trust_oracle_status, trust_oracle_assignments, trust_submit_oracle_vote, trust_get_oracle_task, trust_oracle_earnings
 - Stripe: trust_setup_stripe_customer, trust_create_setup_intent, trust_attach_payment_method, trust_setup_stripe_connect, trust_get_stripe_status
 - Marketplace: trust_list_marketplace, trust_use_marketplace_policy
-- Agent Management: trust_spawn_agent
+- Agent Management: trust_spawn_agent, trust_update_agent, trust_list_policies, trust_agent_stats
 
 ## REST API Reference
 
@@ -112,7 +112,10 @@ Error: { "error": { "code": "ERROR_CODE", "message": "..." }, "meta": { "request
 - GET /agents/search?capabilities=a,b&match=any — Search agents (public)
 - POST /agents/:pubkey/verify — Challenge-response verification (auth)
 - POST /agents/:pubkey/spawn — Register child agent (auth)
+- POST /agents/:pubkey/update — Update agent profile. Body: { name?, endpoint?, capabilities?, metadata? } (auth)
 - GET /agents/:pubkey/escrows?status=&role=&cursor= — List escrows (auth)
+- GET /agents/:pubkey/policies?status=&cursor= — List policies created by agent (auth)
+- GET /agents/:pubkey/stats — Commerce statistics: escrow counts, success rate, value traded (auth)
 
 #### Escrow
 - POST /escrow/propose — Propose escrow. Body: { seller, amountCents, sellerCollateral, taskSpec, verificationMethod?, policyId?, timeoutSeconds?, fundingMode?, buyerAddress?, sellerAddress? } (auth)
@@ -153,7 +156,7 @@ Error: { "error": { "code": "ERROR_CODE", "message": "..." }, "meta": { "request
 - GET /oracles/earnings — Accumulated earnings (auth)
 
 #### Marketplace
-- GET /marketplace — List public policies (public)
+- GET /marketplace?search=&sort=usage|newest — List/search public policies (public)
 - POST /marketplace/:id/use — Clone policy (auth)
 
 #### Stripe Onboarding

@@ -50,7 +50,7 @@ const agent = await quickStart({ name: 'my-agent' })
 
 npm install @trustthenverify/mcp
 
-38 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
+41 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
 
 ## Links
 

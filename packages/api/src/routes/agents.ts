@@ -233,6 +233,179 @@ agents.get('/:pubkey/escrows', async (c) => {
   })
 })
 
+// POST /agents/:pubkey/update — update agent profile
+agents.post('/:pubkey/update', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only update your own agent')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { name?: string; endpoint?: string; capabilities?: string[]; metadata?: Record<string, unknown> }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (body.name !== undefined) updates.name = body.name
+  if (body.endpoint !== undefined) updates.endpoint = body.endpoint
+  if (body.capabilities !== undefined) {
+    if (!Array.isArray(body.capabilities)) {
+      return error(c, 400, 'INVALID_PARAMS', 'capabilities must be an array of strings')
+    }
+    updates.capabilities = body.capabilities
+  }
+  if (body.metadata !== undefined) {
+    if (typeof body.metadata !== 'object' || body.metadata === null) {
+      return error(c, 400, 'INVALID_PARAMS', 'metadata must be an object')
+    }
+    updates.metadata = body.metadata
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return error(c, 400, 'INVALID_PARAMS', 'Nothing to update. Provide name, endpoint, capabilities, or metadata.')
+  }
+
+  const db = createDb(c.env)
+
+  const { data: updated, error: dbError } = await db
+    .from('agents')
+    .update(updates)
+    .eq('public_key', pubkey)
+    .select()
+    .single()
+
+  if (dbError || !updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update agent')
+  }
+
+  return success(c, snakeToCamel<Agent>(updated))
+})
+
+// GET /agents/:pubkey/policies — list policies created by this agent
+agents.get('/:pubkey/policies', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const db = createDb(c.env)
+
+  // Resolve pubkey → agent ID
+  const { data: agent } = await db
+    .from('agents')
+    .select('id')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const agentId = (agent as { id: string }).id
+  const status = c.req.query('status')
+  const cursor = c.req.query('cursor')
+
+  let query = db.from('policies').select('*').eq('created_by', agentId)
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(atob(cursor))
+      query = query.or(`created_at.lt.${decoded.created_at},and(created_at.eq.${decoded.created_at},id.gt.${decoded.id})`)
+    } catch {
+      // Invalid cursor, ignore
+    }
+  }
+
+  query = query.order('created_at', { ascending: false }).limit(20)
+
+  const { data: rows, error: dbError } = await query
+
+  if (dbError) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to list policies')
+  }
+
+  const policies = (rows || []).map((r: Record<string, unknown>) => snakeToCamel(r))
+  let nextCursor: string | null = null
+
+  if (rows && rows.length === 20) {
+    const last = rows[rows.length - 1] as { created_at: string; id: string }
+    nextCursor = btoa(JSON.stringify({ created_at: last.created_at, id: last.id }))
+  }
+
+  return c.json({
+    data: policies,
+    meta: {
+      requestId: crypto.randomUUID(),
+      count: policies.length,
+      cursor: nextCursor,
+    },
+  })
+})
+
+// GET /agents/:pubkey/stats — commerce statistics
+agents.get('/:pubkey/stats', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const db = createDb(c.env)
+
+  const { data: agent } = await db
+    .from('agents')
+    .select('id')
+    .eq('public_key', pubkey)
+    .single()
+
+  if (!agent) {
+    return error(c, 404, 'NOT_FOUND', `Agent not found: ${pubkey}`)
+  }
+
+  const agentId = (agent as { id: string }).id
+
+  // Fetch all escrows for this agent (select minimal columns)
+  const { data: rows } = await db
+    .from('escrows')
+    .select('status, amount_cents, buyer_id, seller_id')
+    .or(`buyer_id.eq.${agentId},seller_id.eq.${agentId}`)
+
+  const escrows = (rows || []) as Array<{ status: string; amount_cents: number; buyer_id: string; seller_id: string }>
+
+  const asBuyer = escrows.filter(e => e.buyer_id === agentId)
+  const asSeller = escrows.filter(e => e.seller_id === agentId)
+
+  const terminal = ['released', 'failed', 'burned', 'expired', 'resolved']
+  const completed = escrows.filter(e => terminal.includes(e.status))
+  const released = escrows.filter(e => e.status === 'released')
+  const disputed = escrows.filter(e => e.status === 'disputed' || e.status === 'resolved')
+
+  const totalValueCents = released.reduce((sum, e) => sum + e.amount_cents, 0)
+  const successRate = completed.length > 0
+    ? Math.round((released.length / completed.length) * 100) / 100
+    : null
+
+  // Count unique counterparties
+  const counterparties = new Set<string>()
+  for (const e of escrows) {
+    if (e.buyer_id === agentId) counterparties.add(e.seller_id)
+    else counterparties.add(e.buyer_id)
+  }
+
+  return success(c, {
+    totalEscrows: escrows.length,
+    asBuyer: asBuyer.length,
+    asSeller: asSeller.length,
+    released: released.length,
+    failed: escrows.filter(e => e.status === 'failed').length,
+    disputed: disputed.length,
+    expired: escrows.filter(e => e.status === 'expired').length,
+    totalValueCents,
+    successRate,
+    uniqueCounterparties: counterparties.size,
+  })
+})
+
 // POST /agents/:pubkey/verify — keypair verification challenge
 agents.post('/:pubkey/verify', async (c) => {
   // If auth middleware passed, the agent is verified (signature was valid)

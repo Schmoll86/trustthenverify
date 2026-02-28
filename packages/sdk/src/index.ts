@@ -367,10 +367,14 @@ export async function getPolicy(
 }
 
 export async function listMarketplacePolicies(
-  options?: { apiUrl?: string }
+  options?: { apiUrl?: string; search?: string; sort?: 'usage' | 'newest' }
 ): Promise<Policy[]> {
   const baseUrl = options?.apiUrl ?? DEFAULT_API_URL
-  const res = await fetch(`${baseUrl}/marketplace`)
+  const qs = new URLSearchParams()
+  if (options?.search) qs.set('search', options.search)
+  if (options?.sort) qs.set('sort', options.sort)
+  const query = qs.toString()
+  const res = await fetch(`${baseUrl}/marketplace${query ? '?' + query : ''}`)
   if (!res.ok) throw new Error('Failed to fetch marketplace policies')
   return (await res.json() as { data: Policy[] }).data
 }
@@ -528,6 +532,41 @@ export class TrustProtocol {
 
   async verify(counterpartyPubkey: string): Promise<{ verified: boolean }> {
     return this.post(`/agents/${counterpartyPubkey}/verify`, {})
+  }
+
+  async updateAgent(params: {
+    name?: string
+    endpoint?: string
+    capabilities?: string[]
+    metadata?: Record<string, unknown>
+  }): Promise<Agent> {
+    return this.post(`/agents/${this.publicKey}/update`, params)
+  }
+
+  async listPolicies(params?: {
+    status?: string
+    cursor?: string
+  }): Promise<{ policies: Policy[]; cursor: string | null }> {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set('status', params.status)
+    if (params?.cursor) qs.set('cursor', params.cursor)
+    const query = qs.toString()
+    return this.get(`/agents/${this.publicKey}/policies${query ? '?' + query : ''}`)
+  }
+
+  async getStats(): Promise<{
+    totalEscrows: number
+    asBuyer: number
+    asSeller: number
+    released: number
+    failed: number
+    disputed: number
+    expired: number
+    totalValueCents: number
+    successRate: number | null
+    uniqueCounterparties: number
+  }> {
+    return this.get(`/agents/${this.publicKey}/stats`)
   }
 
   async spawnAgent(params: {

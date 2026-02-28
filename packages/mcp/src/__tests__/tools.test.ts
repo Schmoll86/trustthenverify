@@ -10,7 +10,7 @@ import { createServer } from '../server.js'
 function mockProtocol(): TrustProtocol {
   const proto = Object.create(TrustProtocol.prototype)
   const methods = [
-    'verify', 'spawnAgent', 'suggestCollateral',
+    'verify', 'spawnAgent', 'suggestCollateral', 'updateAgent', 'listPolicies', 'getStats',
     'proposeEscrow', 'getEscrow', 'listEscrows', 'acceptEscrow', 'fundEscrow',
     'deliver', 'confirmDelivery', 'getVerification',
     'disputeEscrow', 'fileForArbitration', 'getDispute', 'submitRuling',
@@ -29,7 +29,7 @@ function mockProtocol(): TrustProtocol {
 }
 
 // ---------------------------------------------------------------------------
-// Expected tool names (38 total)
+// Expected tool names (41 total)
 // ---------------------------------------------------------------------------
 const EXPECTED_TOOLS = [
   'trust_search_agents',
@@ -70,6 +70,9 @@ const EXPECTED_TOOLS = [
   'trust_attach_payment_method',
   'trust_setup_stripe_connect',
   'trust_get_stripe_status',
+  'trust_update_agent',
+  'trust_list_policies',
+  'trust_agent_stats',
 ]
 
 // ---------------------------------------------------------------------------
@@ -97,9 +100,9 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP tool registration', () => {
-  it('registers exactly 38 tools', async () => {
+  it('registers exactly 41 tools', async () => {
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(38)
+    expect(tools).toHaveLength(41)
   })
 
   it('registers all expected tool names', async () => {
