@@ -32,11 +32,11 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=8192"
 
       - name: Publish SDK
-        run: npm publish --workspace=packages/sdk --provenance --access public
+        run: npm publish --workspace=packages/sdk --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish MCP
-        run: npm publish --workspace=packages/mcp --provenance --access public
+        run: npm publish --workspace=packages/mcp --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
