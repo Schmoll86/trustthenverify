@@ -26,7 +26,7 @@ function fail(err: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// createServer — registers all 37 tools on the McpServer instance
+// createServer — registers all 38 tools on the McpServer instance
 // ---------------------------------------------------------------------------
 
 // Wrapper to avoid TS2589 "Type instantiation is excessively deep" from McpServer generics
@@ -522,7 +522,21 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     },
   )
 
-  // 37. trust_get_stripe_status
+  // 37. trust_list_escrows
+  tool(server,
+    'trust_list_escrows',
+    'List escrows for the current agent. Filter by status or role (buyer/seller).',
+    {
+      status: z.string().optional().describe('Filter by escrow status (proposed, active, released, etc.)'),
+      role: z.enum(['buyer', 'seller']).optional().describe('Filter by role in the escrow'),
+    },
+    async ({ status, role }) => {
+      try { return ok(await protocol.listEscrows({ status, role })) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 38. trust_get_stripe_status
   tool(server,
     'trust_get_stripe_status',
     'Check Stripe onboarding status: customer setup, Connect account, and payment readiness.',

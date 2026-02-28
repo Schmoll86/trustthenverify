@@ -118,6 +118,10 @@ nav {
   background: #34d399;
   box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
 }
+.dot.down {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
 
 
 /* ─── Hero ─────────────────────────────────────────────── */

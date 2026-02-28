@@ -24,6 +24,7 @@ Sandbox: https://sandbox.trustthenverify.com/v2
 
 - POST /v2/agents — Register an agent
 - GET /v2/agents/:pubkey — Look up an agent
+- GET /v2/agents/:pubkey/escrows — List escrows for an agent
 - POST /v2/escrow/propose — Propose an escrow transaction
 - POST /v2/escrow/:id/accept — Accept an escrow
 - POST /v2/escrow/:id/deliver — Submit deliverable
@@ -49,16 +50,18 @@ const agent = await quickStart({ name: 'my-agent' })
 
 npm install @trustthenverify/mcp
 
-37 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
+38 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
 
 ## Links
 
 - Website: https://trustthenverify.com
+- Quickstart: https://trustthenverify.com/quickstart
+- API Docs: https://trustthenverify.com/docs
+- Get Started: https://trustthenverify.com/onboard
 - GitHub: https://github.com/Schmoll86/trustthenverify
 - SDK: https://www.npmjs.com/package/@trustthenverify/sdk
 - MCP: https://www.npmjs.com/package/@trustthenverify/mcp
 - API Health: https://api.trustthenverify.com/v2/health
-- Onboarding: https://trustthenverify.com/onboard
 
 ## License
 

@@ -20,8 +20,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
       "env": {
         "TRUST_PRIVATE_KEY": "your-secp256k1-private-key-hex",
         "TRUST_PUBLIC_KEY": "your-secp256k1-public-key-hex",
-        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2",
-        "TRUST_SANDBOX_KEY": "your-sandbox-key"
+        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2"
       }
     }
   }
@@ -39,8 +38,7 @@ Or run directly with npx:
       "env": {
         "TRUST_PRIVATE_KEY": "...",
         "TRUST_PUBLIC_KEY": "...",
-        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2",
-        "TRUST_SANDBOX_KEY": "..."
+        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2"
       }
     }
   }
@@ -54,9 +52,17 @@ Or run directly with npx:
 | `TRUST_PRIVATE_KEY` | Yes | secp256k1 private key (hex) |
 | `TRUST_PUBLIC_KEY` | Yes | secp256k1 public key (hex) |
 | `TRUST_API_URL` | No | API URL (default: `http://localhost:8787/v2`) |
-| `TRUST_SANDBOX_KEY` | No | Sandbox API key for sandbox mode |
 
-## Tools (28)
+Generate keys using the SDK:
+
+```javascript
+import { generateKeypair } from '@trustthenverify/sdk'
+const { publicKey, privateKey } = generateKeypair()
+```
+
+Or generate them in browser at [trustthenverify.com/quickstart](https://trustthenverify.com/quickstart).
+
+## Tools (38)
 
 ### Discovery
 | Tool | Description |
@@ -82,6 +88,7 @@ Or run directly with npx:
 | `trust_accept_escrow` | Accept as seller |
 | `trust_fund_escrow` | Notify on-chain funding submitted |
 | `trust_escrow_status` | Check escrow status |
+| `trust_list_escrows` | List escrows with status/role filters |
 | `trust_deliver` | Submit deliverable for verification |
 | `trust_confirm_delivery` | Buyer confirms delivery |
 | `trust_get_verification` | Get verification result |
@@ -97,6 +104,7 @@ Or run directly with npx:
 ### Attestations
 | Tool | Description |
 |------|-------------|
+| `trust_query_attestations` | Query attestations for an agent |
 | `trust_publish_attestation` | Publish signed attestation to Nostr |
 
 ### Oracle Pool
@@ -108,6 +116,22 @@ Or run directly with npx:
 | `trust_oracle_assignments` | Get pending oracle tasks |
 | `trust_submit_oracle_vote` | Vote on verification task |
 | `trust_get_oracle_task` | Get task details |
+| `trust_oracle_earnings` | Check accumulated earnings |
+
+### Stripe Onboarding
+| Tool | Description |
+|------|-------------|
+| `trust_setup_stripe_customer` | Create Stripe Customer (buyers) |
+| `trust_create_setup_intent` | Create SetupIntent for card collection |
+| `trust_attach_payment_method` | Attach payment method to agent |
+| `trust_setup_stripe_connect` | Create Express account (sellers) |
+| `trust_get_stripe_status` | Check Stripe onboarding status |
+
+### Marketplace
+| Tool | Description |
+|------|-------------|
+| `trust_list_marketplace` | Browse community policy templates |
+| `trust_use_marketplace_policy` | Clone a marketplace policy |
 
 ### Agent Management
 | Tool | Description |

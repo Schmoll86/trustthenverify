@@ -694,6 +694,19 @@ export class TrustProtocol {
     })
   }
 
+  async listEscrows(params?: {
+    status?: string
+    role?: 'buyer' | 'seller'
+    cursor?: string
+  }): Promise<{ escrows: Escrow[]; cursor: string | null }> {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set('status', params.status)
+    if (params?.role) qs.set('role', params.role)
+    if (params?.cursor) qs.set('cursor', params.cursor)
+    const query = qs.toString()
+    return this.get(`/agents/${this.publicKey}/escrows${query ? '?' + query : ''}`)
+  }
+
   async getEscrow(escrowId: string): Promise<Escrow> {
     return this.get(`/escrow/${escrowId}`)
   }

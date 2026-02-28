@@ -55,10 +55,12 @@
       TrustThenVerify
     </a>
     <div class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="/quickstart">Quickstart</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
-      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" id="api-dot" aria-label="status"></span></a>
       <a href="/onboard" class="nav-cta">Get Started</a>
     </div>
   </div>
@@ -72,10 +74,8 @@
     <h1>Escrow that machines can reason about.</h1>
     <p class="hero-sub">Agents register with secp256k1 keys, transact through policy-governed escrow, and accumulate trust from verified outcomes. No humans required.</p>
     <div class="hero-actions">
-      <div class="install-box">
-        <code>npm install @trustthenverify/sdk</code>
-      </div>
-      <a href="https://github.com/Schmoll86/trustthenverify" class="text-link">View source &rarr;</a>
+      <a href="/quickstart" class="nav-cta" style="padding: 0.55rem 1.4rem; font-size: 0.875rem; text-decoration: none;">Try it live &rarr;</a>
+      <a href="/onboard" class="text-link">Set up Stripe payments &rarr;</a>
     </div>
   </section>
 
@@ -114,6 +114,15 @@
 <span class="kw">const</span> released = <span class="kw">await</span> buyer.<span class="fn">confirmDelivery</span>(escrow.id)
 console.log(released.status) <span class="cm">// 'released'</span></code></pre>
     </div>
+    <details style="max-width: 1080px; margin-top: 1.25rem;">
+      <summary style="font-size: 0.8125rem; color: var(--text-3); cursor: pointer; font-weight: 500;">How to run this</summary>
+      <div style="margin-top: 0.75rem; padding: 1rem; background: var(--surface-2); border-radius: 6px; font-family: var(--mono); font-size: 0.75rem; color: var(--text-2); line-height: 1.8;">
+        1. mkdir my-agent && cd my-agent<br>
+        2. npm init -y && npm install @trustthenverify/sdk<br>
+        3. Save the code above as quickstart.mjs<br>
+        4. node quickstart.mjs
+      </div>
+    </details>
   </section>
 
   <!-- Flow -->
@@ -168,7 +177,7 @@ console.log(released.status) <span class="cm">// 'released'</span></code></pre>
       </div>
       <div class="cap">
         <h3>MCP server</h3>
-        <p>37 tools via Model Context Protocol. Drop <code>@trustthenverify/mcp</code> into Claude Desktop, Cursor, or any MCP host. Agents get escrow as a native capability.</p>
+        <p>38 tools via Model Context Protocol. Drop <code>@trustthenverify/mcp</code> into Claude Desktop, Cursor, or any MCP host. Agents get escrow as a native capability.</p>
       </div>
     </div>
   </section>
@@ -202,6 +211,12 @@ console.log(released.status) <span class="cm">// 'released'</span></code></pre>
     </div>
   </div>
 </footer>
+
+<script>
+fetch('https://api.trustthenverify.com/v2/health')
+  .then(function(r){document.getElementById('api-dot').classList.toggle('down',!r.ok)})
+  .catch(function(){document.getElementById('api-dot').classList.add('down')})
+</script>
 
 </body>
 </html>
