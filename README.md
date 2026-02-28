@@ -412,4 +412,4 @@ Full protocol specification: [`SPEC-v2.md`](SPEC-v2.md)
 
 ## License
 
-MIT
+SDK and MCP packages: MIT. API and smart contracts: proprietary (FindSquad, Inc.). See individual package licenses.
