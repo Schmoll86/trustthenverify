@@ -1,5 +1,5 @@
 /* TrustThenVerify — Landing Page
-   Warm dark palette. Gold accent. Restraint. */
+   Dark blue palette. Blue accent. Trust shield brand. */
 
 *, *::before, *::after {
   margin: 0;
@@ -149,14 +149,14 @@ nav {
 .hero::before {
   content: '';
   position: absolute;
-  top: -60px;
-  right: -100px;
-  width: 700px;
-  height: 400px;
+  top: 20px;
+  right: -40px;
+  width: 600px;
+  height: 340px;
   background: url('banner.jpg') center/cover no-repeat;
-  opacity: 0.12;
-  mask-image: linear-gradient(to left, rgba(0,0,0,0.6) 0%, transparent 80%);
-  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,0.6) 0%, transparent 80%);
+  opacity: 0.08;
+  mask-image: linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 70%);
+  -webkit-mask-image: linear-gradient(to left, rgba(0,0,0,0.5) 0%, transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
