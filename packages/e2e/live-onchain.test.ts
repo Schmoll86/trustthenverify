@@ -1,10 +1,12 @@
 /**
- * Live on-chain E2E tests — Base Sepolia via api.trustthenverify.com.
+ * Live on-chain E2E tests — Base Mainnet via api.trustthenverify.com.
  *
  * Tests the full on-chain escrow flow through the production API:
  *   1. Propose on-chain escrow with Ethereum addresses
- *   2. Seller accepts → API deploys EscrowInstance on Base Sepolia
+ *   2. Seller accepts → API deploys EscrowInstance on Base Mainnet
  *   3. Verify contract exists and has correct state on-chain
+ *
+ * Uses smallest possible amounts ($0.01 = 1 cent) to minimize cost.
  *
  * Usage:
  *   cd packages/e2e
@@ -19,9 +21,9 @@ import {
 } from '@trustthenverify/sdk'
 
 const API_URL = 'https://api.trustthenverify.com'
-const RPC_URL = 'https://sepolia.base.org'
+const RPC_URL = 'https://base-mainnet.g.alchemy.com/v2/pSqXLT1kg-6HQ7rE7Gu9W'
 const FACTORY_ADDRESS = '0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e'
-const USDC_ADDRESS = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,7 +103,7 @@ const SELECTORS = {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
+describe('Live On-Chain — Base Mainnet', { timeout: 120_000 }, () => {
   const buyer = generateKeypair()
   const seller = generateKeypair()
   const buyerAddress = publicKeyToAddress(buyer.publicKey)
@@ -118,7 +120,7 @@ describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
     console.log('Seller address:', sellerAddress)
   })
 
-  it('EscrowFactory is deployed on Base Sepolia', async () => {
+  it('EscrowFactory is deployed on Base Mainnet', async () => {
     const code = await rpcCall('eth_getCode', [FACTORY_ADDRESS, 'latest']) as string
     expect(code.length).toBeGreaterThan(10) // not '0x' (empty)
     console.log('Factory code length:', (code.length - 2) / 2, 'bytes')
@@ -152,10 +154,10 @@ describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
     expect(s2).toBe(201)
   })
 
-  it('proposes on-chain escrow ($1 = 100 cents)', async () => {
+  it('proposes on-chain escrow ($0.01 = 1 cent)', async () => {
     const { status, data, error: err } = await authedFetch('POST', '/v2/escrow/propose', {
       seller: seller.publicKey,
-      amountCents: 100,
+      amountCents: 1,
       sellerCollateral: 50,
       taskSpec: { type: 'data-retrieval', query: 'live on-chain test' },
       verificationMethod: 'buyer_confirm',
@@ -175,7 +177,7 @@ describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
     console.log('Escrow ID:', escrowId)
   })
 
-  it('seller accepts → contract deployed on Base Sepolia', async () => {
+  it('seller accepts → contract deployed on Base Mainnet', async () => {
     const { status, data, error: err } = await authedFetch('POST', `/v2/escrow/${escrowId}/accept`, {}, seller)
     if (status !== 200) console.log('accept error:', err)
     expect(status).toBe(200)
@@ -192,7 +194,7 @@ describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
     console.log('Deploy tx hash: ', d.txHash)
   })
 
-  it('contract exists on Base Sepolia', async () => {
+  it('contract exists on Base Mainnet', async () => {
     // Wait a moment for the tx to be mined
     await new Promise(r => setTimeout(r, 3000))
 
@@ -220,22 +222,22 @@ describe('Live On-Chain — Base Sepolia', { timeout: 120_000 }, () => {
     expect(contractSeller).toBe(sellerAddress.toLowerCase())
   })
 
-  it('contract amount matches escrow (100 cents = 1 USDC = 1000000)', async () => {
+  it('contract amount matches escrow (1 cent = 0.01 USDC = 10000)', async () => {
     const amountHex = await ethCall(contractAddress, SELECTORS.amount)
     const amount = decodeUint256(amountHex)
-    // 100 cents * 10000 = 1,000,000 (6-decimal USDC)
-    expect(amount).toBe(1_000_000n)
-    console.log('Contract amount:', amount.toString(), 'USDC units (1 USDC)')
+    // 1 cent * 10000 = 10,000 (6-decimal USDC)
+    expect(amount).toBe(10_000n)
+    console.log('Contract amount:', amount.toString(), 'USDC units (0.01 USDC)')
   })
 
-  it('contract collateral matches escrow (50 cents = 0.5 USDC = 500000)', async () => {
+  it('contract collateral matches escrow (0.5 cents = 0.005 USDC = 5000)', async () => {
     const collateralHex = await ethCall(contractAddress, SELECTORS.collateral)
     const collateral = decodeUint256(collateralHex)
-    expect(collateral).toBe(500_000n)
-    console.log('Contract collateral:', collateral.toString(), 'USDC units (0.5 USDC)')
+    expect(collateral).toBe(5_000n)
+    console.log('Contract collateral:', collateral.toString(), 'USDC units (0.005 USDC)')
   })
 
-  it('contract uses Base Sepolia USDC', async () => {
+  it('contract uses Base Mainnet USDC', async () => {
     const usdcHex = await ethCall(contractAddress, SELECTORS.usdc)
     const contractUsdc = decodeAddress(usdcHex).toLowerCase()
     expect(contractUsdc).toBe(USDC_ADDRESS.toLowerCase())
@@ -283,7 +285,7 @@ describe('Live On-Chain — Factory Verification', { timeout: 30_000 }, () => {
     console.log('Factory treasury:', treasury)
   })
 
-  it('factory usdc matches Base Sepolia USDC', async () => {
+  it('factory usdc matches Base Mainnet USDC', async () => {
     const result = await ethCall(FACTORY_ADDRESS, '0x3e413bee') // usdc()
     const usdc = decodeAddress(result).toLowerCase()
     expect(usdc).toBe(USDC_ADDRESS.toLowerCase())
