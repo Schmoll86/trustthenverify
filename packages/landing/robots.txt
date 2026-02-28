@@ -1,3 +1,8 @@
 User-agent: *
 Allow: /
 Sitemap: https://trustthenverify.com/sitemap.xml
+
+# LLM-readable site summaries
+# See https://llmstxt.org for the emerging standard
+# llms.txt — concise overview for agent context windows
+# llms-full.txt — complete API reference, SDK examples, MCP tools
