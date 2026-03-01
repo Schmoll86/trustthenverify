@@ -252,7 +252,7 @@
 import {
   requireSession, getSession, setEnv, getEnv,
   apiGet, apiGetPublic, apiPost, truncateKey, formatCents,
-  initMobileNav
+  initMobileNav, escHtml
 } from './ttv-lib.js'
 
 const session = requireSession()
@@ -351,10 +351,10 @@ document.getElementById('search-btn').addEventListener('click', async function()
         card.style.marginBottom = '0.5rem'
         card.innerHTML = `
           <div class="card-header">
-            <span class="card-title">${agent.name || 'Unnamed'}</span>
+            <span class="card-title">${escHtml(agent.name) || 'Unnamed'}</span>
             <span class="card-meta">${truncateKey(agent.publicKey)}</span>
           </div>
-          <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${c}</span>`).join('')}</div>
+          <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${escHtml(c)}</span>`).join('')}</div>
         `
         card.addEventListener('click', () => selectSeller(agent))
         container.appendChild(card)
@@ -388,7 +388,7 @@ function selectSeller(agent) {
   document.getElementById('seller-name').textContent = agent.name || 'Unnamed'
   document.getElementById('seller-key-display').textContent = truncateKey(agent.publicKey)
   const caps = agent.capabilities || []
-  document.getElementById('seller-caps').innerHTML = caps.map(c => `<span class="tag">${c}</span>`).join('')
+  document.getElementById('seller-caps').innerHTML = caps.map(c => `<span class="tag">${escHtml(c)}</span>`).join('')
   document.getElementById('selected-seller').style.display = ''
   hideMsg('step-1-msg')
 }
@@ -421,8 +421,8 @@ async function loadTemplates() {
       const card = document.createElement('div')
       card.className = 'card card-clickable'
       card.innerHTML = `
-        <div class="card-header"><span class="card-title">${t.name || t.intent || 'Template'}</span></div>
-        <div class="card-body" style="font-size:0.75rem">${t.intent || ''}</div>
+        <div class="card-header"><span class="card-title">${escHtml(t.name || t.intent) || 'Template'}</span></div>
+        <div class="card-body" style="font-size:0.75rem">${escHtml(t.intent) || ''}</div>
       `
       card.addEventListener('click', () => selectPolicy(t.id, t.name || t.intent))
       container.appendChild(card)
@@ -444,10 +444,10 @@ async function loadMarketplacePolicies() {
       card.className = 'card card-clickable'
       card.innerHTML = `
         <div class="card-header">
-          <span class="card-title">${p.name || p.intent || 'Policy'}</span>
+          <span class="card-title">${escHtml(p.name || p.intent) || 'Policy'}</span>
           <span class="card-meta">${p.usageCount || 0} uses</span>
         </div>
-        <div class="card-body" style="font-size:0.75rem">${p.intent || ''}</div>
+        <div class="card-body" style="font-size:0.75rem">${escHtml(p.intent) || ''}</div>
       `
       card.addEventListener('click', async () => {
         try {

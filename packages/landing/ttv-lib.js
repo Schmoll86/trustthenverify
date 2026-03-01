@@ -216,6 +216,12 @@ export async function apiGetPublic(path) {
 
 // ── UI Helpers ──────────────────────────────────────────────────────────────
 
+/** Escape HTML entities to prevent XSS when inserting API data into innerHTML. */
+export function escHtml(str) {
+  if (str == null) return ''
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+}
+
 export function statusBadge(status) {
   const labels = {
     proposed: 'Proposed',

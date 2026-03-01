@@ -29,6 +29,7 @@ binding = "AI"
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GATEWAY_PRIVATE_KEY, SANDBOX_KEYS
 # STRIPE_SECRET_KEY, OPENROUTER_API_KEY
+# BASE_RPC_URL — Alchemy RPC endpoint for Base Mainnet (contains API key, must be a secret)
 # NOSTR_RELAY_URLS — comma-separated WebSocket relay URLs (optional, e.g. "wss://relay.damus.io,wss://nos.lol")
 # SENTRY_DSN — Sentry project DSN for error tracking (optional)
 # EMAIL_API_KEY — Resend API key for transactional email notifications (optional)
@@ -41,7 +42,6 @@ id = "29c97513f8c640b889a52ce0111f5d84"
 [vars]
 API_VERSION = "v2"
 ARBITRATION_MODEL = "google/gemini-2.5-flash"
-BASE_RPC_URL = "https://base-mainnet.g.alchemy.com/v2/pSqXLT1kg-6HQ7rE7Gu9W"
 BASE_CHAIN_ID = "8453"
 ESCROW_FACTORY_ADDRESS = "0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e"
 USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"

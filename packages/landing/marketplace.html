@@ -101,7 +101,7 @@
 import {
   getSession, setEnv, getEnv,
   apiGet, apiGetPublic, apiPost, truncateKey,
-  initMobileNav
+  initMobileNav, escHtml
 } from './ttv-lib.js'
 
 // Session-aware CTA
@@ -147,7 +147,7 @@ async function loadPolicies() {
     allPolicies = Array.isArray(result) ? result : []
     renderPolicies()
   } catch (e) {
-    container.innerHTML = '<div class="empty-state">Failed to load policies: ' + e.message + '</div>'
+    container.innerHTML = '<div class="empty-state">Failed to load policies: ' + escHtml(e.message) + '</div>'
   }
 }
 
@@ -186,15 +186,15 @@ function renderPolicies() {
 
     card.innerHTML = `
       <div class="card-header">
-        <span class="card-title">${p.name || 'Unnamed Policy'}</span>
+        <span class="card-title">${escHtml(p.name) || 'Unnamed Policy'}</span>
         ${billingBadge}
       </div>
       <div class="card-body">
-        <p style="font-size:0.75rem; margin-bottom:0.5rem">${p.intent || 'No description'}</p>
+        <p style="font-size:0.75rem; margin-bottom:0.5rem">${escHtml(p.intent) || 'No description'}</p>
         <span class="card-meta">${p.usageCount || 0} uses</span>
       </div>
       <div class="card-footer">
-        <button class="btn-page btn-sm-page use-policy-btn" data-id="${p.id}">Use This Policy</button>
+        <button class="btn-page btn-sm-page use-policy-btn" data-id="${escHtml(p.id)}">Use This Policy</button>
       </div>
     `
     container.appendChild(card)
@@ -262,18 +262,18 @@ async function searchAgents() {
       card.className = 'card'
       card.innerHTML = `
         <div class="card-header">
-          <span class="card-title">${agent.name || 'Unnamed'}</span>
+          <span class="card-title">${escHtml(agent.name) || 'Unnamed'}</span>
           <span class="card-meta">${truncateKey(agent.publicKey)}</span>
         </div>
-        <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${c}</span>`).join('')}</div>
+        <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${escHtml(c)}</span>`).join('')}</div>
         <div class="card-footer">
-          <a href="/transact?seller=${agent.publicKey}" class="btn-page btn-sm-page" style="text-decoration:none">Start Escrow</a>
+          <a href="/transact?seller=${encodeURIComponent(agent.publicKey)}" class="btn-page btn-sm-page" style="text-decoration:none">Start Escrow</a>
         </div>
       `
       container.appendChild(card)
     })
   } catch (e) {
-    container.innerHTML = '<div class="empty-state">Search failed: ' + e.message + '</div>'
+    container.innerHTML = '<div class="empty-state">Search failed: ' + escHtml(e.message) + '</div>'
   }
 }
 

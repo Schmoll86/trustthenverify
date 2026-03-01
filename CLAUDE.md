@@ -141,6 +141,11 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - GETs are public reads (auth middleware skips) → no `agentId` → rate limit skipped.
 - Hono v4 pattern: must replace `c.res` after `next()` to inject headers (response is immutable).
 
+## Security
+- **XSS prevention:** `escHtml()` in `ttv-lib.js` escapes all API-sourced data before `innerHTML` insertion. All landing pages import and use it for agent names, capabilities, policy names/intents, task specs.
+- **CSP:** `_headers` file sets `Content-Security-Policy` on all Pages responses. `script-src 'self' 'unsafe-inline' https://esm.sh` (inline needed for module scripts + hamburger onclick). `connect-src` allows both API domains. `frame-ancestors 'none'` prevents clickjacking.
+- **BASE_RPC_URL:** Moved from `wrangler.toml [vars]` to `wrangler secret put` — contains Alchemy API key, must not be in version control.
+
 ## Before Committing
 - `npm run build --workspace=packages/sdk` must succeed
 - `npm run typecheck --workspace=packages/api` must succeed

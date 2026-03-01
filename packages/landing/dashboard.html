@@ -164,7 +164,7 @@
 import {
   requireSession, getSession, clearSession, setEnv, getEnv,
   apiGet, apiPost, statusBadge, formatCents, formatDate, truncateKey,
-  exportKeyBundle, initMobileNav
+  exportKeyBundle, initMobileNav, escHtml
 } from './ttv-lib.js'
 
 const session = requireSession()
@@ -317,7 +317,7 @@ function renderEscrowCard(esc) {
     </div>
     <div class="card-body">
       <span style="font-size:0.75rem; color:var(--text-3)">
-        ${esc.taskSpec?.query ? esc.taskSpec.query.slice(0, 80) : 'No description'}
+        ${esc.taskSpec?.query ? escHtml(esc.taskSpec.query.slice(0, 80)) : 'No description'}
         ${esc.taskSpec?.query?.length > 80 ? '...' : ''}
       </span>
       <div style="margin-top:0.35rem; font-size:0.6875rem; color:var(--text-3); font-family:var(--mono)">
@@ -357,7 +357,7 @@ function toggleDetail(esc, card) {
   `
 
   if (esc.taskSpec?.query) {
-    rows += `<div class="escrow-detail-row"><span class="escrow-detail-label">Task</span><span class="escrow-detail-value" style="word-break:break-word; max-width:400px">${esc.taskSpec.query}</span></div>`
+    rows += `<div class="escrow-detail-row"><span class="escrow-detail-label">Task</span><span class="escrow-detail-value" style="word-break:break-word; max-width:400px">${escHtml(esc.taskSpec.query)}</span></div>`
   }
 
   // Action buttons
