@@ -259,6 +259,8 @@ export class RealStripeService implements StripeService {
       payment_method: params.buyerPaymentMethodId,
       confirm: 'true',
       capture_method: 'manual',
+      'automatic_payment_methods[enabled]': 'true',
+      'automatic_payment_methods[allow_redirects]': 'never',
       'metadata[escrow_id]': params.escrowId,
       'metadata[type]': 'escrow_buyer_payment',
     }, `escrow_${params.escrowId}_buyer`)
@@ -278,6 +280,8 @@ export class RealStripeService implements StripeService {
           payment_method: params.sellerPaymentMethodId,
           confirm: 'true',
           capture_method: 'manual',
+          'automatic_payment_methods[enabled]': 'true',
+          'automatic_payment_methods[allow_redirects]': 'never',
           'metadata[escrow_id]': params.escrowId,
           'metadata[type]': 'escrow_seller_collateral',
         }, `escrow_${params.escrowId}_seller_collateral`)

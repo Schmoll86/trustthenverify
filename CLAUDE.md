@@ -23,11 +23,13 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 
 ## Middleware Stack (outermost → innermost)
 1. `app.onError(errorHandler)` — error boundary, returns 500 JSON envelope
-2. `loggingMiddleware` — requestId generation, JSON structured logging
-3. Health routes (`/`, `/v2/health`) — no auth required
-4. `authMiddleware` — ECDSA or sandbox key auth
-5. `rateLimitMiddleware` — per-agent KV sliding window (60 writes/min, 300 reads/min)
-6. Route handlers
+2. `cors()` — Hono CORS middleware, allows `trustthenverify.com`, `www.trustthenverify.com`, `sandbox.trustthenverify.com`
+3. `loggingMiddleware` — requestId generation, JSON structured logging
+4. Health routes (`/`, `/v2/health`) — no auth required
+5. Webhooks (`/webhooks/stripe`) — before auth, uses Stripe signature verification
+6. `authMiddleware` — ECDSA or sandbox key auth
+7. `rateLimitMiddleware` — per-agent KV sliding window (60 writes/min, 300 reads/min)
+8. Route handlers
 
 ## Dispute Resolution
 - **Default: `arbitrate`** — LLM judge (Gemini 2.5 Flash via OpenRouter) reviews evidence, rules `buyer_wins` or `seller_wins`. Single round, no appeal. Loser pays 10% fee.
@@ -59,6 +61,8 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Webhook: `POST /webhooks/stripe` — handles `payment_intent.payment_failed` and `account.updated` events. Signature verified via `STRIPE_WEBHOOK_SECRET`.
 - Publishable key: `pk_live_51ST8sc...` embedded in onboarding page (client-side safe).
 - Service: `packages/api/src/lib/stripe.ts` — raw `fetch()` to `api.stripe.com/v1`.
+- **PaymentIntent creation:** Must set `automatic_payment_methods[enabled]=true` + `automatic_payment_methods[allow_redirects]=never` when using `confirm: true` (API-only flows have no browser redirect).
+- **Escrow fund release:** Stripe transfer to seller's Connect account is wrapped in try/catch — if seller hasn't completed KYC, funds stay in platform for later transfer (doesn't block escrow completion).
 
 ## Testing
 - `vitest` for both SDK and API.
@@ -69,6 +73,7 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - E2E on-chain: `packages/e2e/live-onchain.test.ts` — 19 tests against Base Mainnet (deploy + verify contracts on-chain).
 - E2E agents: `packages/e2e/live-agents.test.ts` — 33 tests, 8 scenarios driven by Claude models (Sonnet 4.6, Haiku 4.5, Sonnet 4.5) autonomously calling the API. Requires `ANTHROPIC_API_KEY` in `packages/e2e/.env`.
 - E2E phase completion: `packages/e2e/phase-completion.test.ts` — attestation query, argus refinement, oracle pool, marketplace (sandbox).
+- E2E commerce trial: `packages/e2e/live-commerce-trial.ts` — 4 real-money production escrows ($5.50 total), Stripe rails, automated reasoning + buyer confirm + LLM arbitration. Run: `PAYMENT_METHOD_ID=pm_xxx SKIP_PAUSES=1 npx tsx packages/e2e/live-commerce-trial.ts`
 - Run unit tests: `npm test --workspaces -- --run`
 - Run E2E production: `cd packages/e2e && npx vitest --run live-full.test.ts`
 - Run E2E on-chain: `cd packages/e2e && npx vitest --run live-onchain.test.ts`

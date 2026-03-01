@@ -171,6 +171,7 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 The system is **production-ready**. All features implemented and verified:
 
 - **520+ unit tests** (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
+- **Real-money commerce trial:** 4 production escrows ($5.50), Stripe rails, automated reasoning + buyer confirm + LLM arbitration — all passing
 - **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
 - **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
 - **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet

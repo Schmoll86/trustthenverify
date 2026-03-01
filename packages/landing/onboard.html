@@ -468,7 +468,7 @@ async function ecdsaHeaders(method, path, bodyStr) {
     'Content-Type': 'application/json',
     'X-Agent-Pubkey': keypair.publicKey,
     'X-Agent-Timestamp': String(ts),
-    'X-Agent-Signature': bytesToHex(sig.toCompactRawBytes()),
+    'X-Agent-Signature': bytesToHex(sig),
   }
 }
 
@@ -533,7 +533,15 @@ async function registerAgent() {
     sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
     sessionStorage.setItem('ttv_privkey', keypair.privateKey)
   } catch (e) {
-    msg('phase-a-msg', 'Registration failed: ' + e.message, 'err')
+    if (e.message && e.message.includes('already registered')) {
+      msg('phase-a-msg', 'Agent already registered. Continuing...', 'ok')
+      completePhase('phase-a')
+      unlockPhase('phase-b')
+      sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
+      sessionStorage.setItem('ttv_privkey', keypair.privateKey)
+    } else {
+      msg('phase-a-msg', 'Registration failed: ' + e.message, 'err')
+    }
   }
 }
 
@@ -658,13 +666,17 @@ async function startStripeFlow() {
     try {
       await apiPost('/agents/' + keypair.publicKey + '/stripe/customer', {})
       msg('buyer-customer-msg', 'Stripe Customer created', 'ok')
-      document.getElementById('buyer-step-2').style.display = ''
-
-      if (!stripe) initStripe()
-      cardElement.mount('#card-element')
     } catch (e) {
-      msg('buyer-customer-msg', e.message, 'err')
+      if (e.message && e.message.includes('already has')) {
+        msg('buyer-customer-msg', 'Stripe Customer already exists. Continuing...', 'ok')
+      } else {
+        msg('buyer-customer-msg', e.message, 'err')
+        return
+      }
     }
+    document.getElementById('buyer-step-2').style.display = ''
+    if (!stripe) initStripe()
+    cardElement.mount('#card-element')
   } else {
     document.getElementById('phase-c-title').textContent = 'Complete KYC'
     document.getElementById('seller-flow').style.display = ''

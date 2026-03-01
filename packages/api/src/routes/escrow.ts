@@ -331,17 +331,22 @@ escrow.post('/:id/accept', async (c) => {
     }
 
     const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-    const result = await stripe.captureEscrowFunds({
-      buyerAmountCents: escrowRow.amount_cents,
-      sellerCollateralCents: escrowRow.seller_collateral,
-      escrowId,
-      buyerCustomerId: buyerRow.stripe_customer_id,
-      buyerPaymentMethodId,
-      sellerCustomerId: sellerRow.stripe_customer_id ?? undefined,
-      sellerPaymentMethodId: sellerRow.stripe_default_payment_method ?? undefined,
-    })
-    stripeBuyerPiId = result.stripeBuyerPiId
-    stripeSellerCollateralPiId = result.stripeSellerCollateralPiId
+    try {
+      const result = await stripe.captureEscrowFunds({
+        buyerAmountCents: escrowRow.amount_cents,
+        sellerCollateralCents: escrowRow.seller_collateral,
+        escrowId,
+        buyerCustomerId: buyerRow.stripe_customer_id,
+        buyerPaymentMethodId,
+        sellerCustomerId: sellerRow.stripe_customer_id ?? undefined,
+        sellerPaymentMethodId: sellerRow.stripe_default_payment_method ?? undefined,
+      })
+      stripeBuyerPiId = result.stripeBuyerPiId
+      stripeSellerCollateralPiId = result.stripeSellerCollateralPiId
+    } catch (stripeErr) {
+      console.error('[escrow-accept] Stripe captureEscrowFunds failed:', (stripeErr as Error).message, { escrowId, buyerCustomerId: buyerRow.stripe_customer_id, buyerPaymentMethodId })
+      return error(c, 502, 'STRIPE_ERROR', `Payment processing failed: ${(stripeErr as Error).message}`)
+    }
   }
 
   const timeoutSeconds = (row as Record<string, unknown>).timeout_seconds as number | undefined ?? 3600
@@ -525,13 +530,19 @@ escrow.post('/:id/deliver', async (c) => {
   if (method === 'automated_reasoning' || method === 'schema_validation') {
     const gateway = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
 
-    const vResult = await gateway.verify({
-      escrowId,
-      deliverable: body.deliverable,
-      verificationMethod: method,
-      policyId: escrowRow.policy_id,
-      taskSpec: escrowRow.task_spec,
-    })
+    let vResult
+    try {
+      vResult = await gateway.verify({
+        escrowId,
+        deliverable: body.deliverable,
+        verificationMethod: method,
+        policyId: escrowRow.policy_id,
+        taskSpec: escrowRow.task_spec,
+      })
+    } catch (verifyErr) {
+      console.error('[escrow-deliver] Gateway verify failed:', (verifyErr as Error).message, { escrowId, method, policyId: escrowRow.policy_id })
+      return error(c, 502, 'VERIFICATION_ERROR', `Verification engine failed: ${(verifyErr as Error).message}`)
+    }
 
     // Store verification record
     await db.from('verifications').insert({
@@ -572,13 +583,18 @@ escrow.post('/:id/deliver', async (c) => {
         const sellerRow = sellerAgent as AgentRow | null
         if (sellerRow?.stripe_connected_account_id) {
           const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-          const { transferId } = await stripe.releaseFunds({
-            stripeBuyerPiId: buyerPiId,
-            sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
-            sellerAmountCents: escrowRow.amount_cents,
-            stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
-          })
-          await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+          try {
+            const { transferId } = await stripe.releaseFunds({
+              stripeBuyerPiId: buyerPiId,
+              sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+              sellerAmountCents: escrowRow.amount_cents,
+              stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+            })
+            await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+          } catch (transferErr) {
+            console.error('[escrow-deliver] Stripe transfer failed (seller payout deferred):', (transferErr as Error).message)
+            // Don't fail the escrow — funds stay in platform, can be transferred later
+          }
         }
       }
       const now = new Date().toISOString()
@@ -695,13 +711,18 @@ escrow.post('/:id/confirm', async (c) => {
     const sellerRow = sellerAgent as AgentRow | null
     if (sellerRow?.stripe_connected_account_id) {
       const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-      const { transferId } = await stripe.releaseFunds({
-        stripeBuyerPiId: buyerPiId,
-        sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
-        sellerAmountCents: escrowRow.amount_cents,
-        stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
-      })
-      await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+      try {
+        const { transferId } = await stripe.releaseFunds({
+          stripeBuyerPiId: buyerPiId,
+          sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+          sellerAmountCents: escrowRow.amount_cents,
+          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+        })
+        await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+      } catch (transferErr) {
+        console.error('[escrow-confirm] Stripe transfer failed (seller payout deferred):', (transferErr as Error).message)
+        // Don't fail the confirmation — funds stay in platform, can be transferred later
+      }
     }
   }
 
@@ -913,11 +934,15 @@ escrow.post('/:id/dispute', async (c) => {
       if (escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id) {
         const buyerPiId = escrowRow.stripe_buyer_pi_id ?? escrowRow.stripe_escrow_id!
         const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-        await stripe.refundBuyerAndBurnCollateral({
-          stripeBuyerPiId: buyerPiId,
-          buyerRefundCents: netCents,
-          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
-        })
+        try {
+          await stripe.refundBuyerAndBurnCollateral({
+            stripeBuyerPiId: buyerPiId,
+            buyerRefundCents: netCents,
+            stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+          })
+        } catch (refundErr) {
+          console.error('[escrow-dispute] Stripe refund failed (deferred):', (refundErr as Error).message)
+        }
       }
     }
 
@@ -951,13 +976,17 @@ escrow.post('/:id/dispute', async (c) => {
       const sellerRow = sellerAgent as AgentRow | null
       if (sellerRow?.stripe_connected_account_id) {
         const stripe = getStripe(c as unknown as { env: Env; get(key: 'stripe'): StripeService | undefined })
-        const { transferId } = await stripe.releaseFunds({
-          stripeBuyerPiId: buyerPiId,
-          sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
-          sellerAmountCents: netCents,
-          stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
-        })
-        await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+        try {
+          const { transferId } = await stripe.releaseFunds({
+            stripeBuyerPiId: buyerPiId,
+            sellerConnectedAccountId: sellerRow.stripe_connected_account_id,
+            sellerAmountCents: netCents,
+            stripeSellerCollateralPiId: escrowRow.stripe_seller_collateral_pi_id ?? undefined,
+          })
+          await db.from('escrows').update({ stripe_transfer_id: transferId }).eq('id', escrowId)
+        } catch (transferErr) {
+          console.error('[escrow-dispute] Stripe transfer failed (seller payout deferred):', (transferErr as Error).message)
+        }
       }
     }
   }

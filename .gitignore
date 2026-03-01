@@ -6,3 +6,4 @@ dist/
 node_modules/
 packages/contracts/.env
 .env
+.commerce-trial-state.json

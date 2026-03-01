@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import type { Env } from './lib/db'
 import { loggingMiddleware, errorHandler } from './middleware/logging'
 import { authMiddleware } from './middleware/auth'
@@ -32,6 +33,15 @@ const app = new Hono<AppEnv>()
 
 // ── Error boundary ───────────────────────────────────────────────────────────
 app.onError(errorHandler)
+
+// ── CORS (allow browser requests from landing page) ─────────────────────────
+app.use('*', cors({
+  origin: ['https://trustthenverify.com', 'https://www.trustthenverify.com', 'https://sandbox.trustthenverify.com'],
+  allowHeaders: ['Content-Type', 'X-Agent-Pubkey', 'X-Agent-Timestamp', 'X-Agent-Signature', 'X-Sandbox-Key'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+  maxAge: 86400,
+}))
 
 // ── Logging (outermost middleware) ───────────────────────────────────────────
 app.use('*', loggingMiddleware)
