@@ -170,12 +170,17 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 
 The system is **production-ready**. All features implemented and verified:
 
-- **520+ unit tests** (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
+- **520 unit tests** (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
 - **Real-money commerce trial:** 4 production escrows ($5.50), Stripe rails, automated reasoning + buyer confirm + LLM arbitration — all passing
 - **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
 - **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
 - **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet
 - **41 MCP tools** for AI agent integration
+- **Email notifications:** Queue-based dispatch via Resend on all escrow state transitions
+- **Error tracking:** Sentry integration via toucan-js for Workers
+- **Key persistence:** localStorage opt-in + AES-256-GCM encrypted key backup/restore
+- **Legal:** Terms of Service + Privacy Policy with onboarding consent
+- **Mobile:** Responsive hamburger nav, auto-refresh dashboard
 - **Interactive Quickstart:** [trustthenverify.com/quickstart](https://trustthenverify.com/quickstart)
 - **API Docs:** [trustthenverify.com/docs](https://trustthenverify.com/docs)
 - **Onboarding UI:** [trustthenverify.com/onboard](https://trustthenverify.com/onboard)
@@ -294,6 +299,10 @@ wrangler secret put GATEWAY_PRIVATE_KEY
 wrangler secret put SANDBOX_KEYS
 wrangler secret put STRIPE_SECRET_KEY
 wrangler secret put STRIPE_WEBHOOK_SECRET
+
+# Optional: monitoring + notifications
+wrangler secret put SENTRY_DSN
+wrangler secret put EMAIL_API_KEY
 
 # Deploy
 cd packages/api && wrangler deploy

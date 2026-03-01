@@ -62,9 +62,9 @@ app.get('/v2/health', async (c) => {
     checks.db = 'down'
   }
 
-  // Stripe connectivity check
+  // Stripe connectivity check (use customers endpoint — works with restricted keys)
   try {
-    const res = await fetch('https://api.stripe.com/v1/balance', {
+    const res = await fetch('https://api.stripe.com/v1/customers?limit=1', {
       headers: { 'Authorization': `Bearer ${(c.env as unknown as Env).STRIPE_SECRET_KEY}` },
     })
     checks.stripe = res.ok ? 'ok' : 'degraded'

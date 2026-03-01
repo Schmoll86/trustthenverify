@@ -22,10 +22,10 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - **SDK is ESM:** `moduleResolution: "nodenext"`, `.js` extensions on all relative imports.
 
 ## Middleware Stack (outermost → innermost)
-1. `app.onError(errorHandler)` — error boundary, returns 500 JSON envelope
+1. `app.onError(errorHandler)` — error boundary, returns 500 JSON envelope, reports to Sentry
 2. `cors()` — Hono CORS middleware, allows `trustthenverify.com`, `www.trustthenverify.com`, `sandbox.trustthenverify.com`
-3. `loggingMiddleware` — requestId generation, JSON structured logging
-4. Health routes (`/`, `/v2/health`) — no auth required
+3. `loggingMiddleware` — requestId generation, JSON structured logging, Sentry breadcrumbs (via `toucan-js`)
+4. Health routes (`/`, `/v2/health`) — no auth required, checks DB + Stripe + KV connectivity
 5. Webhooks (`/webhooks/stripe`) — before auth, uses Stripe signature verification
 6. `authMiddleware` — ECDSA or sandbox key auth
 7. `rateLimitMiddleware` — per-agent KV sliding window (60 writes/min, 300 reads/min)
@@ -103,17 +103,35 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Production config: `BASE_RPC_URL` (Alchemy), `BASE_CHAIN_ID=8453`, `ESCROW_FACTORY_ADDRESS` in wrangler.toml vars.
 
 ## Landing Pages (`packages/landing/`)
-- `ttv-lib.js` — shared ES module: session management, ECDSA auth, API helpers, UI utilities (badges, formatters, nav renderer). All pages import from this.
-- `index.html` — marketing home page
-- `onboard.html` — 3-phase onboarding (keygen, role, Stripe). Posts "Go to Dashboard" CTA on completion.
-- `dashboard.html` — agent stats, escrow list with filters (role/status), expand-to-act (accept/deliver/confirm/dispute), cursor pagination
+- `ttv-lib.js` — shared ES module: session management (localStorage + sessionStorage), ECDSA auth, API helpers, UI utilities (badges, formatters, nav renderer, footer renderer), key export/import (AES-256-GCM via Web Crypto). All pages import from this.
+- `index.html` — marketing home page with use cases, live metrics, security badges
+- `onboard.html` — guided onboarding (keygen, "Remember this device" toggle, key backup prompt, email collection, role, Stripe). Consent checkbox gates registration.
+- `dashboard.html` — agent stats, escrow list with filters (role/status), expand-to-act, cursor pagination, auto-refresh polling (30s), settings panel (key export, notification prefs, sign out)
 - `transact.html` — 4-step escrow creation wizard (find seller, define task, attach policy, review+submit)
 - `marketplace.html` — browse policies (public, no auth) + search agents by capability. "Use This Policy" clones via API.
 - `docs.html` — API reference
 - `quickstart.html` — interactive sandbox demo
-- Nav includes: Docs, Quickstart, Marketplace, GitHub, X, SDK, MCP, API status, CTA (session-aware: "Get Started" or "Dashboard")
-- Session stored in `sessionStorage` (`ttv_pubkey`, `ttv_privkey`, `ttv_env`). Dashboard/transact require session, marketplace is public.
-- Clean URLs via `_redirects`: `/dashboard`, `/transact`, `/marketplace`
+- `recover.html` — session recovery page (import key file or paste private key)
+- `terms.html` — Terms of Service
+- `privacy.html` — Privacy Policy
+- Nav includes: Docs, Quickstart, Marketplace, GitHub, X, SDK, MCP, API status, Sign out/Recover, CTA (session-aware). Hamburger menu on mobile (<768px).
+- Session stored in `localStorage` (opt-in persistent) or `sessionStorage` (default ephemeral). `getSession()` checks localStorage first.
+- Clean URLs via `_redirects`: `/dashboard`, `/transact`, `/marketplace`, `/recover`, `/terms`, `/privacy`
+
+## Email Notifications
+- **Queue-based dispatch:** Escrow state transitions enqueue `{ type: 'notification', agentId, eventType, escrowId, payload }` to `QUEUE`.
+- **Consumer:** `packages/api/src/queue/notification-consumer.ts` — looks up agent email + preferences, sends via Resend REST API.
+- **Email service:** `packages/api/src/lib/email.ts` — raw `fetch()` to Resend, no npm dep. Best-effort (non-fatal on failure).
+- **Agent preferences:** `email` (nullable) + `notification_preferences` JSONB on `agents` table. Migration: `011_agent_email_notifications.sql`.
+- **API:** `POST /v2/agents/:pubkey/notifications` — update email and preferences.
+- **Events:** `escrow.proposed`, `escrow.accepted`, `escrow.delivered`, `escrow.released`, `escrow.failed`, `escrow.disputed`, `escrow.expired`, `dispute.ruling`.
+- **Secrets:** `EMAIL_API_KEY` (Resend API key, set via `wrangler secret put`).
+
+## Monitoring
+- **Sentry:** `toucan-js` (Sentry SDK for Workers). Initialized per-request in `loggingMiddleware`. `SENTRY_DSN` secret.
+- **Error handler** reports unhandled errors to Sentry with requestId, path, method.
+- **`captureFinancialError()`** in `middleware/logging.ts` — tags money-related failures with `financial: true` for priority alerting.
+- **Health endpoint:** `GET /v2/health` returns `{ status: 'ok'|'degraded'|'down', version, checks: { db, stripe, kv } }`.
 
 ## Rate Limiting Behavior
 - KV-backed sliding window: 60 writes/min, 300 reads/min per agent.
@@ -124,4 +142,4 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 ## Before Committing
 - `npm run build --workspace=packages/sdk` must succeed
 - `npm run typecheck --workspace=packages/api` must succeed
-- `npm test --workspaces -- --run` must pass
+- `npm test --workspaces -- --run` must pass (520 tests: 471 API + 36 SDK + 13 MCP)
