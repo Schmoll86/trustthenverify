@@ -15,6 +15,8 @@ export interface AgentRow {
   stripe_connected_account_id: string | null
   stripe_onboarding_complete: boolean
   stripe_default_payment_method: string | null
+  email: string | null
+  notification_preferences: Record<string, boolean> | null
 }
 
 export interface PolicyRow {

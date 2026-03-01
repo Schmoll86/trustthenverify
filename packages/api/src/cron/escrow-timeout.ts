@@ -17,8 +17,8 @@ import { checkConsensus } from '../lib/oracle-service'
 async function notifyCron(env: Env, agentId: string, eventType: string, escrowId: string, payload: Record<string, unknown> = {}): Promise<void> {
   try {
     await env.QUEUE.send({ type: 'notification', agentId, eventType, escrowId, payload })
-  } catch {
-    // Non-fatal
+  } catch (e) {
+    console.error('notifyCron failed:', e)
   }
 }
 

@@ -26,6 +26,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -120,6 +123,14 @@
 if (sessionStorage.getItem('ttv_pubkey') || localStorage.getItem('ttv_pubkey')) {
   var cta = document.getElementById('nav-cta')
   if (cta) { cta.href = '/dashboard'; cta.textContent = 'Dashboard' }
+}
+// Close mobile nav on link click
+var _links = document.querySelector('.nav-links')
+var _burger = document.querySelector('.hamburger')
+if (_links && _burger) {
+  _links.addEventListener('click', function(e) {
+    if (e.target.tagName === 'A') { _burger.classList.remove('open'); _links.classList.remove('nav-open') }
+  })
 }
 </script>
 

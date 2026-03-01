@@ -24,6 +24,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -234,6 +237,8 @@
       <span>FindSquad, Inc.</span>
     </div>
     <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X / Twitter</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -246,7 +251,8 @@
 <script type="module">
 import {
   requireSession, getSession, setEnv, getEnv,
-  apiGet, apiGetPublic, apiPost, truncateKey, formatCents
+  apiGet, apiGetPublic, apiPost, truncateKey, formatCents,
+  initMobileNav
 } from './ttv-lib.js'
 
 const session = requireSession()
@@ -521,6 +527,8 @@ function hideMsg(id) {
   el.className = 'msg'
   el.textContent = ''
 }
+
+initMobileNav()
 </script>
 
 </body>

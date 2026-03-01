@@ -24,6 +24,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -83,6 +86,8 @@
       <span>FindSquad, Inc.</span>
     </div>
     <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X / Twitter</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -95,7 +100,8 @@
 <script type="module">
 import {
   getSession, setEnv, getEnv,
-  apiGet, apiGetPublic, apiPost, truncateKey
+  apiGet, apiGetPublic, apiPost, truncateKey,
+  initMobileNav
 } from './ttv-lib.js'
 
 // Session-aware CTA
@@ -104,6 +110,11 @@ if (session) {
   const cta = document.getElementById('nav-cta')
   cta.href = '/dashboard'
   cta.textContent = 'Dashboard'
+}
+
+// If no session but on production hostname, ensure public API calls hit production
+if (!session && ['trustthenverify.com', 'www.trustthenverify.com'].includes(location.hostname)) {
+  setEnv('production')
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -276,6 +287,7 @@ function showMsg(id, text, type) {
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
+initMobileNav()
 loadPolicies()
 </script>
 

@@ -262,6 +262,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -488,8 +491,11 @@
 import { getPublicKey, signAsync } from 'https://esm.sh/@noble/secp256k1@3'
 import { sha256 } from 'https://esm.sh/@noble/hashes@2/sha2'
 import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
+import { initMobileNav } from './ttv-lib.js'
 
 // ── Config ──────────────────────────────────────────────────────────────────
+
+initMobileNav()
 
 const PK_LIVE = 'pk_live_51ST8scJc7Iv6B67gXRZRTnkbmzEgMDdixvmUd8RkKhW8HIkccWIv9wrTdhnOGqqQnqLJl338Y4KlbiMmgtKLcnqY00WjcuChBX'
 const URLS = {

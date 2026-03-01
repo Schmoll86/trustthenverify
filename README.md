@@ -304,8 +304,11 @@ wrangler secret put STRIPE_WEBHOOK_SECRET
 wrangler secret put SENTRY_DSN
 wrangler secret put EMAIL_API_KEY
 
-# Deploy
+# Deploy API Worker
 cd packages/api && wrangler deploy
+
+# Deploy Landing Pages (Cloudflare Pages)
+npx wrangler pages deploy packages/landing --project-name=trustthenverify
 ```
 
 **Smart Contracts (Base Sepolia):**
@@ -375,6 +378,7 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/agents/:pubkey/stripe/connect` | POST | Signed | Create Express account (seller KYC) |
 | `/agents/:pubkey/stripe/status` | GET | Signed | Check Stripe onboarding status |
 | `/agents/:pubkey/stripe/payment-method` | POST | Signed | Attach payment method |
+| `/agents/:pubkey/notifications` | POST | Signed | Update email and notification preferences |
 | `/webhooks/stripe` | POST | Stripe sig | Stripe webhook (payment failures, account updates) |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.

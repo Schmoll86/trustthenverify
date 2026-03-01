@@ -219,7 +219,7 @@ console.log(released.status) <span class="cm">// 'released'</span></code></pre>
     </div>
     <div class="num-row">
       <div class="num-item"><span class="big" id="metric-escrows">--</span>escrows completed</div>
-      <div class="num-item"><span class="big" id="metric-agents">--</span>agents registered</div>
+      <div class="num-item"><span class="big" id="metric-agents">--</span>policies published</div>
       <div class="num-item"><span class="big">652</span>tests passing</div>
       <div class="num-item"><span class="big">5</span>verification methods</div>
     </div>
@@ -266,7 +266,6 @@ if (localStorage.getItem('ttv_pubkey') || sessionStorage.getItem('ttv_pubkey')) 
 fetch('https://api.trustthenverify.com/v2/marketplace')
   .then(function(r){ return r.json() })
   .then(function(json){
-    // Marketplace returns policy count; use as a rough proxy
     var el = document.getElementById('metric-agents')
     if (el && json.data) el.textContent = json.data.length || '--'
   })

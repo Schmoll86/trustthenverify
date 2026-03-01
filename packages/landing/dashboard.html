@@ -24,6 +24,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -161,7 +164,7 @@
 import {
   requireSession, getSession, clearSession, setEnv, getEnv,
   apiGet, apiPost, statusBadge, formatCents, formatDate, truncateKey,
-  exportKeyBundle
+  exportKeyBundle, initMobileNav
 } from './ttv-lib.js'
 
 const session = requireSession()
@@ -490,6 +493,7 @@ setInterval(updateRefreshIndicator, 5000)
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 
+initMobileNav()
 loadDashboard()
 document.getElementById('settings-section').style.display = ''
 </script>

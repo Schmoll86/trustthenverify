@@ -46,6 +46,8 @@ export interface Agent {
   stripeConnectedAccountId: string | null
   stripeOnboardingComplete: boolean
   stripeDefaultPaymentMethod: string | null
+  email: string | null
+  notificationPreferences: Record<string, boolean> | null
 }
 
 export interface Policy {

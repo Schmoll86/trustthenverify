@@ -114,9 +114,11 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - `recover.html` — session recovery page (import key file or paste private key)
 - `terms.html` — Terms of Service
 - `privacy.html` — Privacy Policy
-- Nav includes: Docs, Quickstart, Marketplace, GitHub, X, SDK, MCP, API status, Sign out/Recover, CTA (session-aware). Hamburger menu on mobile (<768px).
+- Nav includes: Docs, Quickstart, Marketplace, GitHub, X, SDK, MCP, API status, Sign out/Recover, CTA (session-aware). Hamburger menu on mobile (<768px) on ALL pages.
 - Session stored in `localStorage` (opt-in persistent) or `sessionStorage` (default ephemeral). `getSession()` checks localStorage first.
 - Clean URLs via `_redirects`: `/dashboard`, `/transact`, `/marketplace`, `/recover`, `/terms`, `/privacy`
+- **Hostname-aware API URL:** Pages that use `apiGetPublic()` without a session detect production hostname and call `setEnv('production')` so public API calls hit `api.trustthenverify.com` instead of defaulting to sandbox.
+- **Deployment requires BOTH:** `wrangler deploy` (API Worker) AND `npx wrangler pages deploy packages/landing --project-name=trustthenverify` (static Pages). Missing the Pages deploy leaves new/updated HTML pages undeployed.
 
 ## Email Notifications
 - **Queue-based dispatch:** Escrow state transitions enqueue `{ type: 'notification', agentId, eventType, escrowId, payload }` to `QUEUE`.

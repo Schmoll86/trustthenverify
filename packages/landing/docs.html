@@ -250,6 +250,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -1052,6 +1055,8 @@ signature = secp256k1.signAsync(msgHash, privateKey, { prehash: false })
       <span>FindSquad, Inc.</span>
     </div>
     <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X / Twitter</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -1060,6 +1065,17 @@ signature = secp256k1.signAsync(msgHash, privateKey, { prehash: false })
     </div>
   </div>
 </footer>
+
+<script>
+// Close mobile nav on link click
+var _links = document.querySelector('.nav-links')
+var _burger = document.querySelector('.hamburger')
+if (_links && _burger) {
+  _links.addEventListener('click', function(e) {
+    if (e.target.tagName === 'A') { _burger.classList.remove('open'); _links.classList.remove('nav-open') }
+  })
+}
+</script>
 
 </body>
 </html>

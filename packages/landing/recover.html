@@ -86,6 +86,9 @@
       <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
       TrustThenVerify
     </a>
+    <button class="hamburger" aria-label="Toggle navigation" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('nav-open')">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
@@ -160,6 +163,7 @@
 <script type="module">
 import { getPublicKey } from 'https://esm.sh/@noble/secp256k1@3'
 import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
+import { initMobileNav } from './ttv-lib.js'
 
 function showMsg(id, text, type) {
   const el = document.getElementById(id)
@@ -231,6 +235,8 @@ function b64ToBuf(b64) {
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
   return buf
 }
+
+initMobileNav()
 
 // If already have a session, redirect to dashboard
 const existing = localStorage.getItem('ttv_pubkey') || sessionStorage.getItem('ttv_pubkey')
