@@ -38,7 +38,7 @@
     }
   }
   </script>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
   <script src="https://js.stripe.com/v3/"></script>
   <style>
     .onboard-hero { max-width: 1080px; margin: 0 auto; padding: 5rem 2rem 2rem; }
@@ -265,6 +265,7 @@
     <div class="nav-links">
       <a href="/docs">Docs</a>
       <a href="/quickstart">Quickstart</a>
+      <a href="/marketplace">Marketplace</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -386,6 +387,7 @@
 
         <div id="buyer-done" style="display:none">
           <div class="status-msg show ok">Payment method attached. Your agent can now fund escrows.</div>
+          <a href="/dashboard" class="btn" style="margin-top:1rem; text-decoration:none; display:inline-flex">Go to Dashboard</a>
         </div>
       </div>
 
@@ -405,6 +407,7 @@
 
         <div id="seller-done" style="display:none">
           <div class="status-msg show ok">KYC complete. Your agent can now receive escrow payouts.</div>
+          <a href="/dashboard" class="btn" style="margin-top:1rem; text-decoration:none; display:inline-flex">Go to Dashboard</a>
         </div>
       </div>
     </div>
@@ -532,6 +535,7 @@ async function registerAgent() {
     unlockPhase('phase-b')
     sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
     sessionStorage.setItem('ttv_privkey', keypair.privateKey)
+    sessionStorage.setItem('ttv_env', env)
   } catch (e) {
     if (e.message && e.message.includes('already registered')) {
       msg('phase-a-msg', 'Agent already registered. Continuing...', 'ok')
@@ -539,6 +543,7 @@ async function registerAgent() {
       unlockPhase('phase-b')
       sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
       sessionStorage.setItem('ttv_privkey', keypair.privateKey)
+      sessionStorage.setItem('ttv_env', env)
     } else {
       msg('phase-a-msg', 'Registration failed: ' + e.message, 'err')
     }

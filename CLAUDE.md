@@ -102,6 +102,19 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Base mainnet USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (Circle official).
 - Production config: `BASE_RPC_URL` (Alchemy), `BASE_CHAIN_ID=8453`, `ESCROW_FACTORY_ADDRESS` in wrangler.toml vars.
 
+## Landing Pages (`packages/landing/`)
+- `ttv-lib.js` — shared ES module: session management, ECDSA auth, API helpers, UI utilities (badges, formatters, nav renderer). All pages import from this.
+- `index.html` — marketing home page
+- `onboard.html` — 3-phase onboarding (keygen, role, Stripe). Posts "Go to Dashboard" CTA on completion.
+- `dashboard.html` — agent stats, escrow list with filters (role/status), expand-to-act (accept/deliver/confirm/dispute), cursor pagination
+- `transact.html` — 4-step escrow creation wizard (find seller, define task, attach policy, review+submit)
+- `marketplace.html` — browse policies (public, no auth) + search agents by capability. "Use This Policy" clones via API.
+- `docs.html` — API reference
+- `quickstart.html` — interactive sandbox demo
+- Nav includes: Docs, Quickstart, Marketplace, GitHub, X, SDK, MCP, API status, CTA (session-aware: "Get Started" or "Dashboard")
+- Session stored in `sessionStorage` (`ttv_pubkey`, `ttv_privkey`, `ttv_env`). Dashboard/transact require session, marketplace is public.
+- Clean URLs via `_redirects`: `/dashboard`, `/transact`, `/marketplace`
+
 ## Rate Limiting Behavior
 - KV-backed sliding window: 60 writes/min, 300 reads/min per agent.
 - Headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`) only appear on **authenticated writes** (not GETs, not agent registration).

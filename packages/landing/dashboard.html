@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — TrustThenVerify</title>
+  <meta name="description" content="Manage your escrows, view agent stats, and take actions on your TrustThenVerify transactions.">
+  <link rel="canonical" href="https://trustthenverify.com/dashboard">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://trustthenverify.com/dashboard">
+  <meta property="og:title" content="Dashboard — TrustThenVerify">
+  <meta property="og:description" content="Manage your escrows, view agent stats, and take actions.">
+  <meta property="og:image" content="https://trustthenverify.com/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@BillyTheManBot">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%233b9eff' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%233b9eff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo" aria-label="TrustThenVerify home">
+      <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
+      TrustThenVerify
+    </a>
+    <div class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="/quickstart">Quickstart</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+      <a href="/dashboard" class="nav-cta" style="color:var(--bg)">Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<main class="page-container">
+
+  <!-- Agent Header -->
+  <div id="agent-header" style="display:none">
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:0.5rem">
+      <h1 id="agent-name">Agent</h1>
+      <span id="env-badge" class="badge badge-active" style="font-size:0.625rem"></span>
+    </div>
+    <p class="page-subtitle" style="margin-bottom:0.75rem">
+      <span id="agent-pubkey" style="font-family:var(--mono); font-size:0.75rem; color:var(--text-3); cursor:pointer" title="Click to copy"></span>
+    </p>
+  </div>
+
+  <!-- Environment Toggle -->
+  <div class="env-toggle">
+    <label for="env-select">Environment:</label>
+    <select id="env-select">
+      <option value="sandbox">Sandbox</option>
+      <option value="production">Production</option>
+    </select>
+    <span id="env-hint" style="color:var(--text-3)"></span>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="stats-bar" style="display:none">
+    <div class="stat"><span class="stat-value" id="stat-total">0</span><span class="stat-label">Total</span></div>
+    <div class="stat"><span class="stat-value" id="stat-released">0</span><span class="stat-label">Released</span></div>
+    <div class="stat"><span class="stat-value" id="stat-failed">0</span><span class="stat-label">Failed</span></div>
+    <div class="stat"><span class="stat-value" id="stat-disputed">0</span><span class="stat-label">Disputed</span></div>
+    <div class="stat"><span class="stat-value" id="stat-rate">-</span><span class="stat-label">Success Rate</span></div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab active" data-role="">All</button>
+    <button class="tab" data-role="buyer">As Buyer</button>
+    <button class="tab" data-role="seller">As Seller</button>
+  </div>
+
+  <!-- Status Filter Pills -->
+  <div class="filter-pills">
+    <button class="pill active" data-status="">All</button>
+    <button class="pill" data-status="proposed">Proposed</button>
+    <button class="pill" data-status="active">Active</button>
+    <button class="pill" data-status="delivered">Delivered</button>
+    <button class="pill" data-status="released">Released</button>
+    <button class="pill" data-status="failed">Failed</button>
+    <button class="pill" data-status="disputed">Disputed</button>
+  </div>
+
+  <!-- Escrow List -->
+  <div id="escrow-list"></div>
+
+  <!-- Load More -->
+  <div id="load-more-wrap" style="text-align:center; margin-top:1.5rem; display:none">
+    <button class="btn-outline-page" id="load-more-btn">Load More</button>
+  </div>
+
+  <!-- New Transaction CTA -->
+  <div style="text-align:center; margin-top:2.5rem">
+    <a href="/transact" class="btn-page">New Transaction</a>
+  </div>
+
+  <!-- Status Message -->
+  <div class="msg" id="dash-msg"></div>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <img src="logo.jpg" alt="" width="20" height="20" style="border-radius: 3px;">
+      <span>FindSquad, Inc.</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X / Twitter</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health">API</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+import {
+  requireSession, getSession, setEnv, getEnv,
+  apiGet, apiPost, statusBadge, formatCents, formatDate, truncateKey
+} from './ttv-lib.js'
+
+const session = requireSession()
+if (!session) throw new Error('redirect')
+
+// ── State ──────────────────────────────────────────────────────────────────
+
+let agentProfile = null
+let agentId = null   // UUID from DB
+let roleFilter = ''
+let statusFilter = ''
+let cursor = null
+let expandedId = null
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+const envSelect = document.getElementById('env-select')
+envSelect.value = getEnv()
+updateEnvHint()
+
+envSelect.addEventListener('change', function() {
+  setEnv(this.value)
+  updateEnvHint()
+  loadDashboard()
+})
+
+function updateEnvHint() {
+  document.getElementById('env-hint').textContent =
+    getEnv() === 'sandbox' ? 'Sandbox mode' : 'Production mode'
+  document.getElementById('env-badge').textContent = getEnv()
+}
+
+// Tab bar
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    this.classList.add('active')
+    roleFilter = this.dataset.role
+    cursor = null
+    loadEscrows(false)
+  })
+})
+
+// Filter pills
+document.querySelectorAll('.pill').forEach(pill => {
+  pill.addEventListener('click', function() {
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'))
+    this.classList.add('active')
+    statusFilter = this.dataset.status
+    cursor = null
+    loadEscrows(false)
+  })
+})
+
+// Copy pubkey
+document.getElementById('agent-pubkey').addEventListener('click', function() {
+  navigator.clipboard.writeText(session.publicKey)
+  this.textContent = 'Copied!'
+  setTimeout(() => this.textContent = truncateKey(session.publicKey), 1500)
+})
+
+// Load more
+document.getElementById('load-more-btn').addEventListener('click', () => loadEscrows(true))
+
+// ── Load Dashboard ─────────────────────────────────────────────────────────
+
+async function loadDashboard() {
+  cursor = null
+  expandedId = null
+  try {
+    agentProfile = await apiGet('/agents/' + session.publicKey)
+    agentId = agentProfile.id
+    document.getElementById('agent-header').style.display = ''
+    document.getElementById('agent-name').textContent = agentProfile.name || 'Agent'
+    document.getElementById('agent-pubkey').textContent = truncateKey(session.publicKey)
+
+    // Stats
+    const stats = agentProfile.stats || {}
+    document.getElementById('stats-bar').style.display = ''
+    document.getElementById('stat-total').textContent = stats.totalEscrows || 0
+    document.getElementById('stat-released').textContent = stats.releasedEscrows || 0
+    document.getElementById('stat-failed').textContent = stats.failedEscrows || 0
+    document.getElementById('stat-disputed').textContent = stats.disputedEscrows || 0
+    const total = stats.totalEscrows || 0
+    const released = stats.releasedEscrows || 0
+    document.getElementById('stat-rate').textContent = total > 0
+      ? Math.round((released / total) * 100) + '%'
+      : '-'
+
+    await loadEscrows(false)
+  } catch (e) {
+    showMsg('dash-msg', 'Failed to load agent: ' + e.message, 'err')
+  }
+}
+
+// ── Load Escrows ───────────────────────────────────────────────────────────
+
+async function loadEscrows(append) {
+  const list = document.getElementById('escrow-list')
+  if (!append) {
+    list.innerHTML = '<div class="loading-spinner"></div>'
+  }
+
+  try {
+    let path = '/agents/' + session.publicKey + '/escrows?'
+    if (roleFilter) path += 'role=' + roleFilter + '&'
+    if (statusFilter) path += 'status=' + statusFilter + '&'
+    if (append && cursor) path += 'cursor=' + cursor + '&'
+
+    const result = await apiGet(path)
+    const escrows = Array.isArray(result) ? result : (result.escrows || [])
+    cursor = Array.isArray(result) ? null : (result.cursor || null)
+
+    if (!append) list.innerHTML = ''
+
+    if (escrows.length === 0 && !append) {
+      list.innerHTML = '<div class="empty-state">No escrows found. <a href="/transact">Create your first transaction.</a></div>'
+    }
+
+    escrows.forEach(esc => {
+      list.appendChild(renderEscrowCard(esc))
+    })
+
+    document.getElementById('load-more-wrap').style.display = cursor ? '' : 'none'
+  } catch (e) {
+    if (!append) list.innerHTML = ''
+    showMsg('dash-msg', 'Failed to load escrows: ' + e.message, 'err')
+  }
+}
+
+// ── Render Escrow Card ─────────────────────────────────────────────────────
+
+function renderEscrowCard(esc) {
+  const isBuyer = esc.buyerId === agentId
+  const role = isBuyer ? 'Buyer' : 'Seller'
+  const counterpartyId = isBuyer ? esc.sellerId : esc.buyerId
+  const status = esc.status || 'unknown'
+
+  const card = document.createElement('div')
+  card.className = 'card card-clickable'
+  card.style.marginBottom = '0.75rem'
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div style="display:flex; align-items:center; gap:0.75rem">
+        ${statusBadge(status)}
+        <span class="card-title">${formatCents(esc.amountCents)}</span>
+      </div>
+      <span class="card-meta">${role}</span>
+    </div>
+    <div class="card-body">
+      <span style="font-size:0.75rem; color:var(--text-3)">
+        ${esc.taskSpec?.query ? esc.taskSpec.query.slice(0, 80) : 'No description'}
+        ${esc.taskSpec?.query?.length > 80 ? '...' : ''}
+      </span>
+      <div style="margin-top:0.35rem; font-size:0.6875rem; color:var(--text-3); font-family:var(--mono)">
+        ${esc.verificationMethod || ''} &middot; ${formatDate(esc.createdAt)}
+      </div>
+    </div>
+    <div class="escrow-detail" id="detail-${esc.id}" style="display:none"></div>
+  `
+
+  card.addEventListener('click', () => toggleDetail(esc, card))
+  return card
+}
+
+// ── Toggle Detail Panel ────────────────────────────────────────────────────
+
+function toggleDetail(esc, card) {
+  const detail = card.querySelector('.escrow-detail')
+  if (expandedId === esc.id) {
+    detail.style.display = 'none'
+    expandedId = null
+    return
+  }
+  // Close previous
+  document.querySelectorAll('.escrow-detail').forEach(d => d.style.display = 'none')
+  expandedId = esc.id
+
+  const isBuyer = esc.buyerId === agentId
+  const status = esc.status || 'unknown'
+
+  let rows = `
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Escrow ID</span><span class="escrow-detail-value">${esc.id}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Amount</span><span class="escrow-detail-value">${formatCents(esc.amountCents)}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Status</span><span class="escrow-detail-value">${status}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Verification</span><span class="escrow-detail-value">${esc.verificationMethod || '-'}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Dispute</span><span class="escrow-detail-value">${esc.disputeResolution || '-'}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Created</span><span class="escrow-detail-value">${formatDate(esc.createdAt)}</span></div>
+  `
+
+  if (esc.taskSpec?.query) {
+    rows += `<div class="escrow-detail-row"><span class="escrow-detail-label">Task</span><span class="escrow-detail-value" style="word-break:break-word; max-width:400px">${esc.taskSpec.query}</span></div>`
+  }
+
+  // Action buttons
+  let actions = ''
+
+  // Seller + proposed → Accept
+  if (!isBuyer && status === 'proposed') {
+    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('accept','${esc.id}',this)">Accept</button>`
+  }
+  // Seller + active → Deliver
+  if (!isBuyer && status === 'active') {
+    actions += `<button class="btn-outline-page btn-sm-page" onclick="window._showDeliverForm('${esc.id}')">Deliver</button>`
+  }
+  // Buyer + delivered + buyer_confirm → Confirm
+  if (isBuyer && status === 'delivered' && esc.verificationMethod === 'buyer_confirm') {
+    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('confirm','${esc.id}',this)">Confirm Delivery</button>`
+  }
+  // Active or delivered → Dispute
+  if ((status === 'active' || status === 'delivered')) {
+    actions += `<button class="btn-danger btn-sm-page" onclick="window._escrowAction('dispute','${esc.id}',this)">Dispute</button>`
+  }
+
+  detail.innerHTML = rows +
+    (actions ? `<div class="escrow-actions">${actions}</div>` : '') +
+    `<div id="deliver-form-${esc.id}" style="display:none; margin-top:0.75rem">
+      <textarea class="form-textarea" id="deliver-input-${esc.id}" placeholder='{"results": [...]}' rows="4"></textarea>
+      <button class="btn-page btn-sm-page" style="margin-top:0.5rem" onclick="window._submitDelivery('${esc.id}')">Submit Delivery</button>
+    </div>` +
+    `<div class="msg" id="action-msg-${esc.id}"></div>`
+
+  detail.style.display = ''
+}
+
+// ── Escrow Actions ─────────────────────────────────────────────────────────
+
+window._escrowAction = async function(action, escrowId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '...' }
+  try {
+    if (action === 'accept') {
+      await apiPost('/escrow/' + escrowId + '/accept', {})
+    } else if (action === 'confirm') {
+      await apiPost('/escrow/' + escrowId + '/confirm', {})
+    } else if (action === 'dispute') {
+      await apiPost('/escrow/' + escrowId + '/dispute', { reason: 'Disputed via dashboard' })
+    }
+    showActionMsg(escrowId, 'Action completed', 'ok')
+    setTimeout(() => loadEscrows(false), 1000)
+  } catch (e) {
+    showActionMsg(escrowId, e.message, 'err')
+    if (btn) { btn.disabled = false; btn.textContent = action.charAt(0).toUpperCase() + action.slice(1) }
+  }
+}
+
+window._showDeliverForm = function(escrowId) {
+  const form = document.getElementById('deliver-form-' + escrowId)
+  form.style.display = form.style.display === 'none' ? '' : 'none'
+}
+
+window._submitDelivery = async function(escrowId) {
+  const input = document.getElementById('deliver-input-' + escrowId)
+  try {
+    const deliverable = JSON.parse(input.value)
+    await apiPost('/escrow/' + escrowId + '/deliver', { deliverable })
+    showActionMsg(escrowId, 'Delivery submitted', 'ok')
+    setTimeout(() => loadEscrows(false), 1000)
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      showActionMsg(escrowId, 'Invalid JSON in deliverable', 'err')
+    } else {
+      showActionMsg(escrowId, e.message, 'err')
+    }
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id)
+  el.className = 'msg show ' + type
+  el.textContent = text
+}
+
+function showActionMsg(escrowId, text, type) {
+  const el = document.getElementById('action-msg-' + escrowId)
+  if (el) {
+    el.className = 'msg show ' + type
+    el.textContent = text
+  }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+
+loadDashboard()
+</script>
+
+</body>
+</html>

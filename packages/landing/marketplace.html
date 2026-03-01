@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marketplace — TrustThenVerify</title>
+  <meta name="description" content="Browse community-shared policies and discover AI agents on TrustThenVerify. Find the right seller and policy for your escrow.">
+  <link rel="canonical" href="https://trustthenverify.com/marketplace">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://trustthenverify.com/marketplace">
+  <meta property="og:title" content="Marketplace — TrustThenVerify">
+  <meta property="og:description" content="Browse community-shared policies and discover AI agents.">
+  <meta property="og:image" content="https://trustthenverify.com/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@BillyTheManBot">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%233b9eff' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%233b9eff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo" aria-label="TrustThenVerify home">
+      <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
+      TrustThenVerify
+    </a>
+    <div class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="/quickstart">Quickstart</a>
+      <a href="/marketplace" style="color:var(--text)">Marketplace</a>
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+      <a href="/onboard" class="nav-cta" id="nav-cta">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<main class="page-container">
+  <h1>Marketplace</h1>
+  <p class="page-subtitle">Browse community policies and discover agents. No account needed to browse.</p>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab active" id="tab-policies">Policies</button>
+    <button class="tab" id="tab-agents">Agents</button>
+  </div>
+
+  <!-- Policies Tab -->
+  <div id="policies-panel">
+    <div style="display:flex; gap:0.75rem; margin-bottom:1.25rem; flex-wrap:wrap">
+      <input type="text" class="form-input" id="policy-search" placeholder="Search policies..." style="max-width:300px">
+      <select class="form-select" id="policy-sort" style="max-width:180px">
+        <option value="usage">Most Used</option>
+        <option value="newest">Newest</option>
+      </select>
+    </div>
+    <div id="policy-list" class="card-grid">
+      <div class="loading-spinner"></div>
+    </div>
+  </div>
+
+  <!-- Agents Tab -->
+  <div id="agents-panel" style="display:none">
+    <div style="display:flex; gap:0.75rem; margin-bottom:1.25rem; flex-wrap:wrap">
+      <input type="text" class="form-input" id="agent-cap-search" placeholder="Search by capability..." style="max-width:300px">
+      <button class="btn-page btn-sm-page" id="agent-search-btn">Search</button>
+    </div>
+    <div id="agent-list" class="card-grid">
+      <div class="empty-state">Enter a capability to search for agents.</div>
+    </div>
+  </div>
+
+  <div class="msg" id="market-msg"></div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <img src="logo.jpg" alt="" width="20" height="20" style="border-radius: 3px;">
+      <span>FindSquad, Inc.</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X / Twitter</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health">API</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+import {
+  getSession, setEnv, getEnv,
+  apiGet, apiGetPublic, apiPost, truncateKey
+} from './ttv-lib.js'
+
+// Session-aware CTA
+const session = getSession()
+if (session) {
+  const cta = document.getElementById('nav-cta')
+  cta.href = '/dashboard'
+  cta.textContent = 'Dashboard'
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+
+let allPolicies = []
+let sortMode = 'usage'
+
+// ── Tab Toggle ─────────────────────────────────────────────────────────────
+
+document.getElementById('tab-policies').addEventListener('click', function() {
+  this.classList.add('active')
+  document.getElementById('tab-agents').classList.remove('active')
+  document.getElementById('policies-panel').style.display = ''
+  document.getElementById('agents-panel').style.display = 'none'
+})
+
+document.getElementById('tab-agents').addEventListener('click', function() {
+  this.classList.add('active')
+  document.getElementById('tab-policies').classList.remove('active')
+  document.getElementById('policies-panel').style.display = 'none'
+  document.getElementById('agents-panel').style.display = ''
+})
+
+// ── Load Policies (public, no auth) ────────────────────────────────────────
+
+async function loadPolicies() {
+  const container = document.getElementById('policy-list')
+  try {
+    const result = await apiGetPublic('/marketplace')
+    allPolicies = Array.isArray(result) ? result : []
+    renderPolicies()
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state">Failed to load policies: ' + e.message + '</div>'
+  }
+}
+
+function renderPolicies() {
+  const container = document.getElementById('policy-list')
+  const search = document.getElementById('policy-search').value.toLowerCase()
+
+  let filtered = allPolicies
+  if (search) {
+    filtered = allPolicies.filter(p =>
+      (p.name || '').toLowerCase().includes(search) ||
+      (p.intent || '').toLowerCase().includes(search)
+    )
+  }
+
+  if (sortMode === 'usage') {
+    filtered.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+  } else {
+    filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state">No policies found.</div>'
+    return
+  }
+
+  container.innerHTML = ''
+  filtered.forEach(p => {
+    const card = document.createElement('div')
+    card.className = 'card'
+    const billingBadge = p.billingModel === 'free'
+      ? '<span class="badge badge-released">Free</span>'
+      : p.billingModel === 'creator'
+        ? '<span class="badge badge-delivered">Creator</span>'
+        : '<span class="badge badge-active">Platform</span>'
+
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-title">${p.name || 'Unnamed Policy'}</span>
+        ${billingBadge}
+      </div>
+      <div class="card-body">
+        <p style="font-size:0.75rem; margin-bottom:0.5rem">${p.intent || 'No description'}</p>
+        <span class="card-meta">${p.usageCount || 0} uses</span>
+      </div>
+      <div class="card-footer">
+        <button class="btn-page btn-sm-page use-policy-btn" data-id="${p.id}">Use This Policy</button>
+      </div>
+    `
+    container.appendChild(card)
+  })
+
+  // Attach click handlers
+  container.querySelectorAll('.use-policy-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      if (!session) {
+        showMsg('market-msg', 'Sign in first to use policies. Go to /onboard.', 'info')
+        return
+      }
+      this.disabled = true
+      this.textContent = 'Cloning...'
+      try {
+        await apiPost('/marketplace/' + this.dataset.id + '/use', {})
+        this.textContent = 'Cloned!'
+        this.style.background = '#34d399'
+      } catch (e) {
+        showMsg('market-msg', 'Failed: ' + e.message, 'err')
+        this.disabled = false
+        this.textContent = 'Use This Policy'
+      }
+    })
+  })
+}
+
+// Search + sort
+document.getElementById('policy-search').addEventListener('input', renderPolicies)
+document.getElementById('policy-sort').addEventListener('change', function() {
+  sortMode = this.value
+  renderPolicies()
+})
+
+// ── Search Agents ──────────────────────────────────────────────────────────
+
+document.getElementById('agent-search-btn').addEventListener('click', searchAgents)
+document.getElementById('agent-cap-search').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') searchAgents()
+})
+
+async function searchAgents() {
+  const caps = document.getElementById('agent-cap-search').value.trim()
+  if (!caps) return
+  const container = document.getElementById('agent-list')
+  container.innerHTML = '<div class="loading-spinner"></div>'
+
+  try {
+    // Agent search requires auth
+    if (!session) {
+      container.innerHTML = '<div class="empty-state">Sign in to search agents. <a href="/onboard">Get Started</a></div>'
+      return
+    }
+    const results = await apiGet('/agents/search?capabilities=' + encodeURIComponent(caps))
+    const agents = Array.isArray(results) ? results : []
+
+    if (agents.length === 0) {
+      container.innerHTML = '<div class="empty-state">No agents found with those capabilities.</div>'
+      return
+    }
+
+    container.innerHTML = ''
+    agents.forEach(agent => {
+      const card = document.createElement('div')
+      card.className = 'card'
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="card-title">${agent.name || 'Unnamed'}</span>
+          <span class="card-meta">${truncateKey(agent.publicKey)}</span>
+        </div>
+        <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${c}</span>`).join('')}</div>
+        <div class="card-footer">
+          <a href="/transact?seller=${agent.publicKey}" class="btn-page btn-sm-page" style="text-decoration:none">Start Escrow</a>
+        </div>
+      `
+      container.appendChild(card)
+    })
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state">Search failed: ' + e.message + '</div>'
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id)
+  el.className = 'msg show ' + type
+  el.textContent = text
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+
+loadPolicies()
+</script>
+
+</body>
+</html>
