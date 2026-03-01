@@ -17,6 +17,7 @@ import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleA
 import { webhooks } from './routes/webhooks'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 import { handleOracleDispatch, type OracleQueueMessage } from './queue/oracle-consumer'
+import { handleNotification, type NotificationQueueMessage } from './queue/notification-consumer'
 
 type AppEnv = {
   Bindings: Env
@@ -48,7 +49,48 @@ app.use('*', loggingMiddleware)
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/', (c) => c.json({ name: 'TrustThenVerify API', version: '2.0.0', spec: 'SPEC-v2' }))
-app.get('/v2/health', (c) => c.json({ status: 'ok', version: '2.0.0' }))
+app.get('/v2/health', async (c) => {
+  const checks: Record<string, string> = {}
+
+  // DB connectivity check
+  try {
+    const { createDb } = await import('./lib/db')
+    const db = createDb(c.env as unknown as Env)
+    const { error } = await db.from('agents').select('id').limit(1)
+    checks.db = error ? 'degraded' : 'ok'
+  } catch {
+    checks.db = 'down'
+  }
+
+  // Stripe connectivity check
+  try {
+    const res = await fetch('https://api.stripe.com/v1/balance', {
+      headers: { 'Authorization': `Bearer ${(c.env as unknown as Env).STRIPE_SECRET_KEY}` },
+    })
+    checks.stripe = res.ok ? 'ok' : 'degraded'
+  } catch {
+    checks.stripe = 'down'
+  }
+
+  // KV check
+  try {
+    const kv = (c.env as unknown as Env).RATE_LIMIT_KV
+    if (kv) {
+      await kv.get('__health_check')
+      checks.kv = 'ok'
+    } else {
+      checks.kv = 'unavailable'
+    }
+  } catch {
+    checks.kv = 'down'
+  }
+
+  const allOk = Object.values(checks).every(v => v === 'ok' || v === 'unavailable')
+  const anyDown = Object.values(checks).some(v => v === 'down')
+  const status = anyDown ? 'down' : allOk ? 'ok' : 'degraded'
+
+  return c.json({ status, version: '2.0.0', checks })
+})
 
 // ── Webhooks (before auth — authenticates via Stripe signature) ──────────
 app.route('/webhooks', webhooks)
@@ -79,13 +121,15 @@ export default {
     await handleAutoRefinement(env)
     await handleOraclePayouts(env)
   },
-  async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage>, env: Env) {
+  async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage | NotificationQueueMessage>, env: Env) {
     for (const msg of batch.messages) {
       try {
         if (msg.body.type === 'argus_refine') {
           await handleArgusMessage(msg.body as ArgusQueueMessage, env)
         } else if (msg.body.type === 'oracle_dispatch') {
           await handleOracleDispatch(msg.body as OracleQueueMessage, env)
+        } else if (msg.body.type === 'notification') {
+          await handleNotification(msg.body as NotificationQueueMessage, env)
         }
         msg.ack()
       } catch {

@@ -30,6 +30,8 @@ binding = "AI"
 # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GATEWAY_PRIVATE_KEY, SANDBOX_KEYS
 # STRIPE_SECRET_KEY, OPENROUTER_API_KEY
 # NOSTR_RELAY_URLS — comma-separated WebSocket relay URLs (optional, e.g. "wss://relay.damus.io,wss://nos.lol")
+# SENTRY_DSN — Sentry project DSN for error tracking (optional)
+# EMAIL_API_KEY — Resend API key for transactional email notifications (optional)
 
 # Rate limiting — per-agent sliding window counters
 [[kv_namespaces]]

@@ -31,6 +31,9 @@ export interface Env {
   // Arbitration
   ARBITRATION_MODEL?: string           // default: 'google/gemini-2.5-flash'
   STRIPE_WEBHOOK_SECRET?: string
+  // Monitoring & notifications
+  SENTRY_DSN?: string
+  EMAIL_API_KEY?: string
 }
 
 /** Create a Supabase client per-request from Workers env bindings. */

@@ -68,6 +68,7 @@ agents.post('/', async (c) => {
       name: body.name ?? null,
       capabilities: body.capabilities ?? [],
       metadata: {},
+      email: (body as Record<string, unknown>).email ?? null,
     })
     .select()
     .single()
@@ -669,6 +670,46 @@ agents.post('/:pubkey/stripe/setup-intent', async (c) => {
   })
 
   return success(c, result)
+})
+
+// PATCH /agents/:pubkey/notifications — update email + notification preferences
+agents.post('/:pubkey/notifications', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only update your own notification preferences')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { email?: string; preferences?: Record<string, boolean> }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  const updates: Record<string, unknown> = {}
+  if (body.email !== undefined) updates.email = body.email || null
+  if (body.preferences !== undefined) updates.notification_preferences = body.preferences
+
+  if (Object.keys(updates).length === 0) {
+    return error(c, 400, 'INVALID_PARAMS', 'Provide email or preferences')
+  }
+
+  const db = createDb(c.env)
+  const { data: updated, error: dbError } = await db
+    .from('agents')
+    .update(updates)
+    .eq('public_key', pubkey)
+    .select()
+    .single()
+
+  if (dbError || !updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update notification preferences')
+  }
+
+  return success(c, snakeToCamel<Agent>(updated))
 })
 
 // POST /agents/:pubkey/stripe/payment-method — attach payment method to Customer

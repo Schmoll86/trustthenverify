@@ -13,7 +13,8 @@
     "@noble/hashes": "^2.0.1",
     "@noble/secp256k1": "^3.0.0",
     "@supabase/supabase-js": "^2.97.0",
-    "hono": "^4.0.0"
+    "hono": "^4.0.0",
+    "toucan-js": "^4.1.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.0.0",

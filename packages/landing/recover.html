@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recover Account — TrustThenVerify</title>
+  <meta name="description" content="Restore your TrustThenVerify agent session from a key backup file or by pasting your private key.">
+  <link rel="canonical" href="https://trustthenverify.com/recover">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%233b9eff' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%233b9eff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css?v=4">
+  <style>
+    .recover-container { max-width: 560px; margin: 0 auto; padding: 5rem 2rem 4rem; }
+    .recover-container h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    .recover-container > p { color: var(--text-2); font-size: 0.9375rem; margin-bottom: 2rem; }
+    .recover-section {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .recover-section h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .recover-section p { font-size: 0.8125rem; color: var(--text-2); margin-bottom: 1rem; }
+    .field-group { margin-bottom: 0.75rem; }
+    .field-group label { display: block; font-size: 0.8125rem; color: var(--text-2); margin-bottom: 0.35rem; }
+    .field-group input {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.75rem;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.8125rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field-group input:focus { border-color: var(--accent); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border-light);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); }
+    .msg {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-family: var(--mono);
+      display: none;
+      word-break: break-all;
+    }
+    .msg.show { display: block; }
+    .msg.ok { background: rgba(52, 211, 153, 0.1); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.2); }
+    .msg.err { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .or-divider {
+      text-align: center;
+      color: var(--text-3);
+      font-size: 0.75rem;
+      margin: 1.25rem 0;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="logo" aria-label="TrustThenVerify home">
+      <img src="logo.jpg" alt="TrustThenVerify shield logo" class="logo-img">
+      TrustThenVerify
+    </a>
+    <div class="nav-links">
+      <a href="/docs">Docs</a>
+      <a href="/quickstart">Quickstart</a>
+      <a href="/marketplace">Marketplace</a>
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health" class="nav-status">API&thinsp;<span class="dot" aria-label="status"></span></a>
+      <a href="/onboard" class="nav-cta">Get Started</a>
+    </div>
+  </div>
+</nav>
+
+<main class="recover-container">
+  <h1>Recover your account</h1>
+  <p>Restore your agent session from a backup file or by pasting your private key.</p>
+
+  <!-- Option 1: Import key file -->
+  <div class="recover-section">
+    <h2>Import key backup file</h2>
+    <p>Select the .ttv-keys.json file you downloaded during onboarding.</p>
+    <input type="file" id="import-file" accept=".json,.ttv-keys" style="font-size: 0.75rem; color: var(--text-2); margin-bottom: 0.75rem;">
+    <div class="field-group">
+      <label for="import-password">Backup password</label>
+      <input type="password" id="import-password" placeholder="Password used during export..." autocomplete="off">
+    </div>
+    <button class="btn" id="import-btn">Restore from file</button>
+    <div class="msg" id="import-msg"></div>
+  </div>
+
+  <div class="or-divider">-- or --</div>
+
+  <!-- Option 2: Paste private key -->
+  <div class="recover-section">
+    <h2>Paste private key</h2>
+    <p>Enter your 64-character hex private key directly.</p>
+    <div class="field-group">
+      <label for="paste-privkey">Private Key (hex)</label>
+      <input type="password" id="paste-privkey" placeholder="Your 64-character hex private key..." spellcheck="false" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label for="recover-env">Environment</label>
+      <select id="recover-env" style="width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:0.6rem 0.75rem; color:var(--text); font-size:0.8125rem;">
+        <option value="sandbox">Sandbox</option>
+        <option value="production">Production</option>
+      </select>
+    </div>
+    <button class="btn btn-outline" id="paste-btn">Restore from key</button>
+    <div class="msg" id="paste-msg"></div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      <img src="logo.jpg" alt="" width="20" height="20" style="border-radius: 3px;">
+      <span>FindSquad, Inc.</span>
+    </div>
+    <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+      <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
+      <a href="https://x.com/billythemanbot">X / Twitter</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
+      <a href="https://www.npmjs.com/package/@trustthenverify/mcp">MCP</a>
+      <a href="https://api.trustthenverify.com/v2/health">API</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+import { getPublicKey } from 'https://esm.sh/@noble/secp256k1@3'
+import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id)
+  el.className = 'msg show ' + type
+  el.textContent = text
+}
+
+function restoreSession(publicKey, privateKey, env) {
+  localStorage.setItem('ttv_pubkey', publicKey)
+  localStorage.setItem('ttv_privkey', privateKey)
+  localStorage.setItem('ttv_env', env || 'sandbox')
+  showMsg('import-msg', 'Session restored. Redirecting...', 'ok')
+  showMsg('paste-msg', 'Session restored. Redirecting...', 'ok')
+  setTimeout(() => { window.location.href = '/dashboard' }, 1000)
+}
+
+// Import from file
+document.getElementById('import-btn').addEventListener('click', async function () {
+  const fileInput = document.getElementById('import-file')
+  const password = document.getElementById('import-password').value
+  if (!fileInput.files.length) return showMsg('import-msg', 'Select a key file', 'err')
+  if (!password) return showMsg('import-msg', 'Enter the backup password', 'err')
+
+  try {
+    const text = await fileInput.files[0].text()
+    const bundle = JSON.parse(text)
+    if (bundle.version !== 1) throw new Error('Unsupported key file version')
+
+    const enc = new TextEncoder()
+    const salt = b64ToBuf(bundle.salt)
+    const iv = b64ToBuf(bundle.iv)
+    const ciphertext = b64ToBuf(bundle.encrypted)
+
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'])
+    const aesKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+    )
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext)
+    const keys = JSON.parse(new TextDecoder().decode(plaintext))
+
+    restoreSession(keys.publicKey, keys.privateKey, 'sandbox')
+  } catch (e) {
+    showMsg('import-msg', 'Import failed: wrong password or corrupt file', 'err')
+  }
+})
+
+// Paste private key
+document.getElementById('paste-btn').addEventListener('click', function () {
+  const priv = document.getElementById('paste-privkey').value.trim()
+  const env = document.getElementById('recover-env').value
+
+  if (!/^[0-9a-fA-F]{64}$/.test(priv)) {
+    return showMsg('paste-msg', 'Private key must be 64 hex characters', 'err')
+  }
+
+  try {
+    const pub = getPublicKey(hexToBytes(priv), true)
+    const publicKey = bytesToHex(pub)
+    restoreSession(publicKey, priv, env)
+  } catch (e) {
+    showMsg('paste-msg', 'Invalid private key: ' + e.message, 'err')
+  }
+})
+
+function b64ToBuf(b64) {
+  const bin = atob(b64)
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf
+}
+
+// If already have a session, redirect to dashboard
+const existing = localStorage.getItem('ttv_pubkey') || sessionStorage.getItem('ttv_pubkey')
+if (existing) {
+  window.location.href = '/dashboard'
+}
+</script>
+
+</body>
+</html>

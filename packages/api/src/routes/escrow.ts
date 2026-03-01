@@ -33,6 +33,21 @@ type AppEnv = {
 
 export const escrow = new Hono<AppEnv>()
 
+/** Enqueue a notification for an agent. Non-blocking, best-effort. */
+async function enqueueNotification(
+  env: { QUEUE: { send(msg: unknown): Promise<void> } },
+  agentId: string,
+  eventType: string,
+  escrowId: string,
+  payload: Record<string, unknown> = {},
+): Promise<void> {
+  try {
+    await env.QUEUE.send({ type: 'notification', agentId, eventType, escrowId, payload })
+  } catch {
+    // Non-fatal — notifications are best-effort
+  }
+}
+
 /** Get or create StripeService. Tests inject via c.set('stripe', mock). */
 function getStripe(c: { env: Env; get(key: 'stripe'): StripeService | undefined }): StripeService {
   const injected = c.get('stripe')
@@ -202,6 +217,11 @@ escrow.post('/propose', async (c) => {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to create escrow')
   }
 
+  // Notify seller of new proposal
+  await enqueueNotification(c.env, seller.id as string, 'escrow.proposed', (row as Record<string, unknown>).id as string, {
+    amountCents: body.amountCents, status: 'proposed',
+  })
+
   return success(c, snakeToCamel<Escrow>(row), 201)
 })
 
@@ -291,6 +311,9 @@ escrow.post('/:id/accept', async (c) => {
       return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
     }
 
+    await enqueueNotification(c.env, escrowRow.buyer_id, 'escrow.accepted', escrowId, {
+      amountCents: escrowRow.amount_cents, status: 'accepted',
+    })
     return success(c, snakeToCamel<Escrow>(updated))
   }
 
@@ -370,6 +393,9 @@ escrow.post('/:id/accept', async (c) => {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
   }
 
+  await enqueueNotification(c.env, escrowRow.buyer_id, 'escrow.accepted', escrowId, {
+    amountCents: escrowRow.amount_cents, status: 'active',
+  })
   return success(c, snakeToCamel<Escrow>(updated))
 })
 
@@ -514,6 +540,11 @@ escrow.post('/:id/deliver', async (c) => {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
   }
 
+  // Notify buyer of delivery
+  await enqueueNotification(c.env, escrowRow.buyer_id, 'escrow.delivered', escrowId, {
+    amountCents: escrowRow.amount_cents, status: 'delivered',
+  })
+
   // Automated verification for non-buyer_confirm methods
   const method = escrowRow.verification_method
 
@@ -605,6 +636,8 @@ escrow.post('/:id/deliver', async (c) => {
         .select()
         .single()
 
+      await enqueueNotification(c.env, escrowRow.buyer_id, 'escrow.released', escrowId, { status: 'released', amountCents: escrowRow.amount_cents })
+      await enqueueNotification(c.env, escrowRow.seller_id, 'escrow.released', escrowId, { status: 'released', amountCents: escrowRow.amount_cents })
       return success(c, snakeToCamel<Escrow>(released ?? updated))
     }
 
@@ -639,6 +672,8 @@ escrow.post('/:id/deliver', async (c) => {
         .select()
         .single()
 
+      await enqueueNotification(c.env, escrowRow.buyer_id, 'escrow.failed', escrowId, { status: 'failed', amountCents: escrowRow.amount_cents })
+      await enqueueNotification(c.env, escrowRow.seller_id, 'escrow.failed', escrowId, { status: 'failed', amountCents: escrowRow.amount_cents })
       return success(c, snakeToCamel<Escrow>(failed ?? updated))
     }
 
@@ -858,6 +893,12 @@ escrow.post('/:id/dispute', async (c) => {
   if (!disputed) {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
   }
+
+  // Notify the other party of the dispute
+  const otherPartyId = escrowRow.buyer_id === callerId ? escrowRow.seller_id : escrowRow.buyer_id
+  await enqueueNotification(c.env, otherPartyId, 'escrow.disputed', escrowId, {
+    amountCents: escrowRow.amount_cents, status: 'disputed',
+  })
 
   // 2. Insert dispute record
   const { data: disputeRecord } = await db

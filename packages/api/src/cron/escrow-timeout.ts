@@ -13,6 +13,15 @@ import { RealOracleService } from '../lib/oracle-service'
 import type { OracleService } from '../lib/oracle-service'
 import { checkConsensus } from '../lib/oracle-service'
 
+/** Best-effort notification enqueue for cron events. */
+async function notifyCron(env: Env, agentId: string, eventType: string, escrowId: string, payload: Record<string, unknown> = {}): Promise<void> {
+  try {
+    await env.QUEUE.send({ type: 'notification', agentId, eventType, escrowId, payload })
+  } catch {
+    // Non-fatal
+  }
+}
+
 export async function handleEscrowTimeout(
   env: Env,
   stripe?: StripeService,
@@ -42,6 +51,8 @@ export async function handleEscrowTimeout(
         .from('escrows')
         .update({ status: 'expired', completed_at: now })
         .eq('id', row.id)
+      // Notify buyer their proposal expired
+      await notifyCron(env, row.buyer_id, 'escrow.expired', row.id, { status: 'expired' })
     } else if (row.status === 'accepted') {
       // On-chain: funding window expired before both funded
       if (row.funding_mode === 'onchain' && row.contract_address) {
@@ -56,6 +67,9 @@ export async function handleEscrowTimeout(
         .from('escrows')
         .update({ status: 'expired', completed_at: now })
         .eq('id', row.id)
+      // Notify both parties of expiration
+      await notifyCron(env, row.buyer_id, 'escrow.expired', row.id, { status: 'expired' })
+      await notifyCron(env, row.seller_id, 'escrow.expired', row.id, { status: 'expired' })
     } else if (row.status === 'active') {
       // Refund buyer, burn seller collateral
       if (row.funding_mode === 'onchain' && row.contract_address) {
@@ -77,6 +91,9 @@ export async function handleEscrowTimeout(
         .from('escrows')
         .update({ status: 'expired', completed_at: now })
         .eq('id', row.id)
+      // Notify both parties of active escrow expiration
+      await notifyCron(env, row.buyer_id, 'escrow.expired', row.id, { status: 'expired', amountCents: row.amount_cents })
+      await notifyCron(env, row.seller_id, 'escrow.expired', row.id, { status: 'expired', amountCents: row.amount_cents })
     }
     processed++
   }

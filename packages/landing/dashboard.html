@@ -96,10 +96,43 @@
     <button class="btn-outline-page" id="load-more-btn">Load More</button>
   </div>
 
+  <!-- Settings Section -->
+  <div id="settings-section" style="display:none; margin-top: 2rem;">
+    <details style="background: var(--surface); border: 1px solid var(--border-light); border-radius: 10px; padding: 1.25rem 1.5rem;">
+      <summary style="font-size: 0.875rem; font-weight: 600; cursor: pointer; color: var(--text);">Settings</summary>
+      <div style="margin-top: 1rem;">
+        <!-- Key Export -->
+        <div style="margin-bottom: 1.25rem;">
+          <p style="font-size: 0.8125rem; color: var(--text-2); margin-bottom: 0.5rem;">Export your keys to a password-protected backup file.</p>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <input type="password" id="export-password" placeholder="Backup password (min 6 chars)" style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.75rem; color:var(--text); font-family:var(--mono); font-size:0.75rem; width:260px;">
+            <button class="btn-outline-page btn-sm-page" id="export-keys-btn">Export Keys</button>
+          </div>
+          <div class="msg" id="export-msg"></div>
+        </div>
+        <!-- Notification Preferences -->
+        <div id="notif-prefs" style="display:none;">
+          <p style="font-size: 0.8125rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem;">Email Notifications</p>
+          <p style="font-size: 0.75rem; color: var(--text-3); margin-bottom: 0.75rem;">Email on file: <span id="notif-email">-</span></p>
+          <div id="notif-toggles" style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;"></div>
+          <button class="btn-outline-page btn-sm-page" id="save-notif-btn" style="margin-top:0.75rem;">Save preferences</button>
+          <div class="msg" id="notif-msg"></div>
+        </div>
+        <!-- Sign out -->
+        <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+          <button class="btn-outline-page btn-sm-page" id="sign-out-btn" style="border-color:rgba(239,68,68,0.3); color:#ef4444;">Sign out</button>
+        </div>
+      </div>
+    </details>
+  </div>
+
   <!-- New Transaction CTA -->
   <div style="text-align:center; margin-top:2.5rem">
     <a href="/transact" class="btn-page">New Transaction</a>
   </div>
+
+  <!-- Auto-refresh indicator -->
+  <div id="refresh-indicator" style="text-align:center; margin-top:0.75rem; font-size:0.6875rem; color:var(--text-3);"></div>
 
   <!-- Status Message -->
   <div class="msg" id="dash-msg"></div>
@@ -113,6 +146,8 @@
       <span>FindSquad, Inc.</span>
     </div>
     <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X / Twitter</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -124,8 +159,9 @@
 
 <script type="module">
 import {
-  requireSession, getSession, setEnv, getEnv,
-  apiGet, apiPost, statusBadge, formatCents, formatDate, truncateKey
+  requireSession, getSession, clearSession, setEnv, getEnv,
+  apiGet, apiPost, statusBadge, formatCents, formatDate, truncateKey,
+  exportKeyBundle
 } from './ttv-lib.js'
 
 const session = requireSession()
@@ -409,9 +445,53 @@ function showActionMsg(escrowId, text, type) {
   }
 }
 
+// ── Export Keys ─────────────────────────────────────────────────────────────
+
+document.getElementById('export-keys-btn').addEventListener('click', async function () {
+  const password = document.getElementById('export-password').value
+  if (!password || password.length < 6) {
+    return showMsg('export-msg', 'Password must be at least 6 characters', 'err')
+  }
+  try {
+    await exportKeyBundle(password)
+    showMsg('export-msg', 'Key backup downloaded', 'ok')
+  } catch (e) {
+    showMsg('export-msg', 'Export failed: ' + e.message, 'err')
+  }
+})
+
+// ── Sign Out ────────────────────────────────────────────────────────────────
+
+document.getElementById('sign-out-btn').addEventListener('click', function () {
+  clearSession()
+  window.location.href = '/'
+})
+
+// ── Auto-refresh polling ────────────────────────────────────────────────────
+
+let lastRefresh = Date.now()
+const POLL_INTERVAL = 30000
+
+function updateRefreshIndicator() {
+  const ago = Math.round((Date.now() - lastRefresh) / 1000)
+  const el = document.getElementById('refresh-indicator')
+  if (el) el.textContent = ago < 5 ? 'Updated just now' : `Updated ${ago}s ago`
+}
+
+setInterval(() => {
+  if (document.visibilityState === 'visible') {
+    loadEscrows(false)
+    lastRefresh = Date.now()
+  }
+  updateRefreshIndicator()
+}, POLL_INTERVAL)
+
+setInterval(updateRefreshIndicator, 5000)
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 
 loadDashboard()
+document.getElementById('settings-section').style.display = ''
 </script>
 
 </body>

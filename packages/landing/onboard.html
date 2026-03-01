@@ -321,10 +321,42 @@
           </div>
         </div>
         <p class="key-warning">Save your private key. It cannot be recovered.</p>
+
+        <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="remember-device" style="accent-color: var(--accent); width: 16px; height: 16px;">
+          <label for="remember-device" style="font-size: 0.8125rem; color: var(--text-2); cursor: pointer;">Remember this device</label>
+        </div>
+      </div>
+
+      <!-- Key backup prompt (shown after keygen) -->
+      <div id="backup-prompt" style="display:none; margin-top: 1rem;">
+        <div style="background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 1rem;">
+          <p style="font-size: 0.8125rem; color: var(--text-2); margin-bottom: 0.75rem;">Back up your keys to a password-protected file. You can restore from this file if you lose access.</p>
+          <div class="field-group" style="margin-bottom: 0.75rem;">
+            <label for="backup-password">Backup password</label>
+            <input type="password" id="backup-password" placeholder="Choose a strong password..." autocomplete="new-password">
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-outline btn-sm" id="backup-btn">Download backup</button>
+            <button class="btn-outline btn-sm" id="skip-backup-btn" style="background:none; border:1px solid var(--border); color:var(--text-3); border-radius:6px; padding:0.35rem 0.75rem; font-size:0.75rem; cursor:pointer;">Skip for now</button>
+          </div>
+        </div>
       </div>
 
       <span class="toggle-link" id="toggle-existing">I already have keys</span>
       <div class="existing-keys" id="existing-keys">
+        <!-- Import from key file -->
+        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px;">
+          <p style="font-size: 0.8125rem; color: var(--text-2); margin-bottom: 0.5rem;">Import from a .ttv-keys backup file:</p>
+          <input type="file" id="import-file" accept=".json,.ttv-keys" style="font-size: 0.75rem; color: var(--text-2); margin-bottom: 0.5rem;">
+          <div class="field-group" style="margin-bottom: 0.5rem;">
+            <label for="import-password">Backup password</label>
+            <input type="password" id="import-password" placeholder="Password used during export..." autocomplete="off">
+          </div>
+          <button class="btn btn-outline btn-sm" id="import-btn">Import Key File</button>
+          <div class="status-msg" id="import-msg"></div>
+        </div>
+        <p style="font-size: 0.75rem; color: var(--text-3); margin-bottom: 0.75rem; text-align: center;">-- or paste keys directly --</p>
         <div class="field-group">
           <label for="existing-pubkey">Public Key (hex)</label>
           <input type="text" id="existing-pubkey" placeholder="03abc123..." spellcheck="false" autocomplete="off">
@@ -334,6 +366,14 @@
           <input type="password" id="existing-privkey" placeholder="Your private key..." spellcheck="false" autocomplete="off">
         </div>
         <button class="btn btn-outline" id="use-existing-btn">Use These Keys</button>
+      </div>
+
+      <!-- Email field (optional) -->
+      <div id="email-field" style="display:none; margin-top: 1rem;">
+        <div class="field-group">
+          <label for="agent-email">Email (optional -- for escrow notifications)</label>
+          <input type="email" id="agent-email" placeholder="you@example.com" autocomplete="email">
+        </div>
       </div>
 
       <div class="status-msg" id="phase-a-msg"></div>
@@ -355,6 +395,16 @@
         <div class="path-card" id="role-seller" data-role="seller">
           <h3>Seller</h3>
           <p>Complete KYC to receive escrow payouts. You get paid when you deliver.</p>
+        </div>
+      </div>
+
+      <!-- Consent checkbox -->
+      <div id="consent-wrap" style="display:none; margin-top: 1rem;">
+        <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+          <input type="checkbox" id="consent-check" style="accent-color:var(--accent); width:16px; height:16px; margin-top:2px; flex-shrink:0;">
+          <label for="consent-check" style="font-size:0.8125rem; color:var(--text-2); cursor:pointer; line-height:1.5;">
+            I agree to the <a href="/terms" target="_blank" style="color:var(--accent)">Terms of Service</a> and <a href="/privacy" target="_blank" style="color:var(--accent)">Privacy Policy</a>, and I understand I am responsible for securing my private key.
+          </label>
         </div>
       </div>
 
@@ -423,6 +473,8 @@
       <span>FindSquad, Inc.</span>
     </div>
     <div class="footer-links">
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
       <a href="https://github.com/Schmoll86/trustthenverify">GitHub</a>
       <a href="https://x.com/billythemanbot">X / Twitter</a>
       <a href="https://www.npmjs.com/package/@trustthenverify/sdk">SDK</a>
@@ -523,27 +575,37 @@ document.getElementById('env-select').addEventListener('change', function () {
 
 // ── Phase A: Generate Identity ──────────────────────────────────────────────
 
+function persistSession() {
+  const persist = document.getElementById('remember-device').checked
+  const store = persist ? localStorage : sessionStorage
+  store.setItem('ttv_pubkey', keypair.publicKey)
+  store.setItem('ttv_privkey', keypair.privateKey)
+  store.setItem('ttv_env', env)
+}
+
 async function registerAgent() {
   try {
+    const email = document.getElementById('agent-email').value.trim() || undefined
     await apiPost('/agents', {
       publicKey: keypair.publicKey,
       name: 'web-agent',
       capabilities: [],
+      email,
     })
     msg('phase-a-msg', 'Agent registered on ' + env, 'ok')
     completePhase('phase-a')
     unlockPhase('phase-b')
-    sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
-    sessionStorage.setItem('ttv_privkey', keypair.privateKey)
-    sessionStorage.setItem('ttv_env', env)
+    persistSession()
+    document.getElementById('backup-prompt').style.display = ''
+    document.getElementById('email-field').style.display = ''
   } catch (e) {
     if (e.message && e.message.includes('already registered')) {
       msg('phase-a-msg', 'Agent already registered. Continuing...', 'ok')
       completePhase('phase-a')
       unlockPhase('phase-b')
-      sessionStorage.setItem('ttv_pubkey', keypair.publicKey)
-      sessionStorage.setItem('ttv_privkey', keypair.privateKey)
-      sessionStorage.setItem('ttv_env', env)
+      persistSession()
+      document.getElementById('backup-prompt').style.display = ''
+      document.getElementById('email-field').style.display = ''
     } else {
       msg('phase-a-msg', 'Registration failed: ' + e.message, 'err')
     }
@@ -615,9 +677,97 @@ document.getElementById('use-existing-btn').addEventListener('click', async func
   this.textContent = 'Registered'
 })
 
-// Restore from session
-const savedPub = sessionStorage.getItem('ttv_pubkey')
-const savedPriv = sessionStorage.getItem('ttv_privkey')
+// Import key file
+document.getElementById('import-btn').addEventListener('click', async function () {
+  const fileInput = document.getElementById('import-file')
+  const password = document.getElementById('import-password').value
+  if (!fileInput.files.length) return msg('import-msg', 'Select a key file', 'err')
+  if (!password) return msg('import-msg', 'Enter the backup password', 'err')
+
+  try {
+    const enc = new TextEncoder()
+    const text = await fileInput.files[0].text()
+    const bundle = JSON.parse(text)
+    if (bundle.version !== 1) throw new Error('Unsupported key file version')
+
+    const salt = _b64ToBuf(bundle.salt)
+    const iv = _b64ToBuf(bundle.iv)
+    const ciphertext = _b64ToBuf(bundle.encrypted)
+
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'])
+    const aesKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+    )
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext)
+    const keys = JSON.parse(new TextDecoder().decode(plaintext))
+
+    keypair = { publicKey: keys.publicKey, privateKey: keys.privateKey }
+    document.getElementById('keys-display').style.display = ''
+    document.getElementById('pubkey-value').textContent = keypair.publicKey
+    document.getElementById('privkey-value').textContent = '\u2022'.repeat(32)
+    document.getElementById('privkey-value').dataset.real = keypair.privateKey
+    document.getElementById('generate-btn').textContent = 'Imported'
+    document.getElementById('generate-btn').disabled = true
+
+    msg('import-msg', 'Keys imported successfully', 'ok')
+    await registerAgent()
+  } catch (e) {
+    msg('import-msg', 'Import failed: ' + (e.message || 'Wrong password or corrupt file'), 'err')
+  }
+})
+
+function _b64ToBuf(b64) {
+  const bin = atob(b64)
+  const buf = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+  return buf
+}
+
+// Backup button
+document.getElementById('backup-btn').addEventListener('click', async function () {
+  const password = document.getElementById('backup-password').value
+  if (!password || password.length < 6) return msg('phase-a-msg', 'Backup password must be at least 6 characters', 'err')
+
+  try {
+    const enc = new TextEncoder()
+    const salt = crypto.getRandomValues(new Uint8Array(16))
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'])
+    const aesKey = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']
+    )
+    const plaintext = enc.encode(JSON.stringify({ publicKey: keypair.publicKey, privateKey: keypair.privateKey }))
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext)
+
+    const bundle = {
+      version: 1,
+      encrypted: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+      iv: btoa(String.fromCharCode(...iv)),
+      salt: btoa(String.fromCharCode(...salt)),
+    }
+
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ttv-keys.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    msg('phase-a-msg', 'Key backup downloaded', 'ok')
+  } catch (e) {
+    msg('phase-a-msg', 'Backup failed: ' + e.message, 'err')
+  }
+})
+
+document.getElementById('skip-backup-btn').addEventListener('click', function () {
+  document.getElementById('backup-prompt').style.display = 'none'
+})
+
+// Restore from session (check localStorage first, then sessionStorage)
+const savedPub = localStorage.getItem('ttv_pubkey') || sessionStorage.getItem('ttv_pubkey')
+const savedPriv = localStorage.getItem('ttv_privkey') || sessionStorage.getItem('ttv_privkey')
 if (savedPub && savedPriv) {
   keypair = { publicKey: savedPub, privateKey: savedPriv }
   document.getElementById('keys-display').style.display = ''
@@ -626,6 +776,9 @@ if (savedPub && savedPriv) {
   document.getElementById('privkey-value').dataset.real = savedPriv
   document.getElementById('generate-btn').textContent = 'Generated'
   document.getElementById('generate-btn').disabled = true
+  if (localStorage.getItem('ttv_pubkey')) {
+    document.getElementById('remember-device').checked = true
+  }
   completePhase('phase-a')
   unlockPhase('phase-b')
 }
@@ -637,10 +790,24 @@ document.querySelectorAll('.path-card').forEach(card => {
     document.querySelectorAll('.path-card').forEach(c => c.classList.remove('selected'))
     this.classList.add('selected')
     selectedRole = this.dataset.role
+    // Show consent checkbox
+    document.getElementById('consent-wrap').style.display = ''
+    // Gate on consent
+    const check = document.getElementById('consent-check')
+    if (check.checked) {
+      completePhase('phase-b')
+      unlockPhase('phase-c')
+      startStripeFlow()
+    }
+  })
+})
+
+document.getElementById('consent-check').addEventListener('change', function () {
+  if (this.checked && selectedRole) {
     completePhase('phase-b')
     unlockPhase('phase-c')
     startStripeFlow()
-  })
+  }
 })
 
 // ── Phase C: Stripe Onboarding ──────────────────────────────────────────────
