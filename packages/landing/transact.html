@@ -15,6 +15,25 @@
   <meta name="twitter:site" content="@BillyTheManBot">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'%3E%3Cpath d='M16 2L4 8v8c0 7.2 5.1 13.9 12 16 6.9-2.1 12-8.8 12-16V8L16 2z' stroke='%233b9eff' stroke-width='2'/%3E%3Cpath d='M10 16l4 4 8-8' stroke='%233b9eff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=4">
+  <style>
+    .progress-bar { display:flex; align-items:center; justify-content:center; gap:0; margin-bottom:2rem; padding:0 1rem; }
+    .progress-step { display:flex; align-items:center; gap:0; }
+    .progress-circle {
+      width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      font-size:0.75rem; font-weight:700; font-family:var(--mono);
+      background:var(--surface-2); color:var(--text-3); border:2px solid var(--border);
+      transition: all 0.2s;
+      flex-shrink:0;
+    }
+    .progress-circle.active { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+    .progress-circle.done { background:#34d399; color:var(--bg); border-color:#34d399; }
+    .progress-label { margin-left:0.35rem; font-size:0.6875rem; color:var(--text-3); white-space:nowrap; }
+    .progress-label.active { color:var(--accent); font-weight:600; }
+    .progress-label.done { color:#34d399; }
+    .progress-line { width:40px; height:2px; background:var(--border); margin:0 0.25rem; flex-shrink:0; }
+    .progress-line.done { background:#34d399; }
+    @media (max-width:600px) { .progress-label { display:none; } .progress-line { width:24px; } }
+  </style>
 </head>
 <body>
 
@@ -53,6 +72,29 @@
       <option value="production">Production</option>
     </select>
     <span id="env-hint" style="color:var(--text-3)"></span>
+  </div>
+
+  <!-- Progress Bar -->
+  <div class="progress-bar" id="progress-bar">
+    <div class="progress-step">
+      <div class="progress-circle active" data-step="1">1</div>
+      <span class="progress-label active" data-step="1">Find Seller</span>
+    </div>
+    <div class="progress-line" data-line="1"></div>
+    <div class="progress-step">
+      <div class="progress-circle" data-step="2">2</div>
+      <span class="progress-label" data-step="2">Define Task</span>
+    </div>
+    <div class="progress-line" data-line="2"></div>
+    <div class="progress-step">
+      <div class="progress-circle" data-step="3">3</div>
+      <span class="progress-label" data-step="3">Policy</span>
+    </div>
+    <div class="progress-line" data-line="3"></div>
+    <div class="progress-step">
+      <div class="progress-circle" data-step="4">4</div>
+      <span class="progress-label" data-step="4">Review</span>
+    </div>
   </div>
 
   <!-- Step 1: Find Seller -->
@@ -136,6 +178,7 @@
         <option value="schema_validation">Schema Validation</option>
         <option value="oracle_consensus">Oracle Consensus</option>
       </select>
+      <div id="verification-desc" style="margin-top:0.35rem; font-size:0.75rem; color:var(--text-3); line-height:1.5"></div>
     </div>
 
     <div class="form-group">
@@ -291,6 +334,20 @@ function updateEnvHint() {
     getEnv() === 'sandbox' ? 'Sandbox mode' : 'Production mode'
 }
 
+// Verification method descriptions
+const verificationDescs = {
+  buyer_confirm: 'You manually review and approve. Simplest option.',
+  automated_reasoning: 'AI evaluates against your task description. Attach a policy for best results.',
+  schema_validation: 'Validated against JSON schema from attached policy. Best for structured data.',
+  oracle_consensus: 'Independent verifiers vote on quality. Most objective. Adds $5 surcharge.',
+}
+const verDescEl = document.getElementById('verification-desc')
+const verSelect = document.getElementById('verification-select')
+verDescEl.textContent = verificationDescs[verSelect.value]
+verSelect.addEventListener('change', () => {
+  verDescEl.textContent = verificationDescs[verSelect.value] || ''
+})
+
 // Pre-fill seller from query param
 const params = new URLSearchParams(window.location.search)
 if (params.get('seller')) {
@@ -303,6 +360,22 @@ if (params.get('seller')) {
 function showStep(n) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'))
   document.getElementById('step-' + n).classList.add('active')
+  // Update progress bar
+  document.querySelectorAll('.progress-circle').forEach(c => {
+    const s = parseInt(c.dataset.step)
+    c.classList.toggle('active', s === n)
+    c.classList.toggle('done', s < n)
+    c.textContent = s < n ? '\u2713' : String(s)
+  })
+  document.querySelectorAll('.progress-label').forEach(l => {
+    const s = parseInt(l.dataset.step)
+    l.classList.toggle('active', s === n)
+    l.classList.toggle('done', s < n)
+  })
+  document.querySelectorAll('.progress-line').forEach(l => {
+    const s = parseInt(l.dataset.line)
+    l.classList.toggle('done', s < n)
+  })
 }
 
 document.getElementById('next-to-step-2').addEventListener('click', () => showStep(2))
@@ -353,23 +426,27 @@ document.getElementById('search-btn').addEventListener('click', async function()
     const agents = Array.isArray(results) ? results : []
     const container = document.getElementById('search-results')
     if (agents.length === 0) {
-      container.innerHTML = '<div class="empty-state">No agents found with those capabilities.</div>'
+      container.innerHTML = '<div class="empty-state">No agents found with those capabilities. <a href="/marketplace">Browse the marketplace</a> or <a href="/quickstart">register an agent</a>.</div>'
     } else {
       container.innerHTML = ''
       agents.forEach(agent => {
         const card = document.createElement('div')
         card.className = 'card card-clickable'
         card.style.marginBottom = '0.5rem'
+        card.dataset.pubkey = agent.publicKey
         card.innerHTML = `
           <div class="card-header">
             <span class="card-title">${escHtml(agent.name) || 'Unnamed'}</span>
             <span class="card-meta">${truncateKey(agent.publicKey)}</span>
           </div>
           <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${escHtml(c)}</span>`).join('')}</div>
+          <div class="card-stats" style="font-size:0.6875rem; color:var(--text-3); padding:0.25rem 0"></div>
         `
         card.addEventListener('click', () => selectSeller(agent))
         container.appendChild(card)
       })
+      // Batch-fetch stats
+      fetchAgentStats(container)
     }
   } catch (e) {
     showMsg('step-1-msg', e.message, 'err')
@@ -528,6 +605,28 @@ document.getElementById('submit-btn').addEventListener('click', async function()
     this.textContent = 'Propose Escrow'
   }
 })
+
+// ── Agent Stats ───────────────────────────────────────────────────────────
+
+async function fetchAgentStats(container) {
+  const cards = container.querySelectorAll('[data-pubkey]')
+  if (cards.length === 0) return
+  const pubkeys = Array.from(cards).map(c => c.dataset.pubkey).join(',')
+  try {
+    const stats = await apiGetPublic('/agents/stats/batch?pubkeys=' + encodeURIComponent(pubkeys))
+    cards.forEach(card => {
+      const s = stats[card.dataset.pubkey]
+      if (!s) return
+      const el = card.querySelector('.card-stats')
+      if (!el) return
+      const parts = []
+      if (s.successRate !== null) parts.push(s.successRate + '% success')
+      if (s.totalEscrows > 0) parts.push(s.totalEscrows + ' escrows')
+      if (s.totalValueCents > 0) parts.push('$' + (s.totalValueCents / 100).toFixed(0) + ' volume')
+      el.textContent = parts.join(' \u00b7 ') || ''
+    })
+  } catch { /* stats are non-critical */ }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

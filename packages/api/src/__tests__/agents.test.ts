@@ -338,6 +338,52 @@ describe('POST /v2/agents/:pubkey/spawn', () => {
   })
 })
 
+describe('GET /v2/agents/stats/batch — batch stats', () => {
+  beforeEach(() => {
+    mockDb = createMockDb()
+    mockDb.seedTable('agents', [
+      { id: 'a1', public_key: 'pk_alpha', name: 'Alpha', capabilities: [], metadata: {}, parent_id: null, endpoint: null, created_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z' },
+      { id: 'a2', public_key: 'pk_beta', name: 'Beta', capabilities: [], metadata: {}, parent_id: null, endpoint: null, created_at: '2026-01-02T00:00:00Z', last_seen_at: '2026-01-02T00:00:00Z' },
+    ])
+    mockDb.seedTable('escrows', [
+      { id: 'e1', buyer_id: 'a1', seller_id: 'a2', status: 'released', amount_cents: 5000, created_at: '2026-02-01T00:00:00Z' },
+      { id: 'e2', buyer_id: 'a1', seller_id: 'a2', status: 'failed', amount_cents: 2000, created_at: '2026-02-02T00:00:00Z' },
+      { id: 'e3', buyer_id: 'a1', seller_id: 'a2', status: 'released', amount_cents: 3000, created_at: '2026-02-03T00:00:00Z' },
+    ])
+  })
+
+  it('returns stats for multiple agents', async () => {
+    const res = await app.request('/v2/agents/stats/batch?pubkeys=pk_alpha,pk_beta', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+    const json = await res.json() as { data: Record<string, { totalEscrows: number; released: number; successRate: number | null; totalValueCents: number }> }
+    expect(json.data.pk_alpha).toBeDefined()
+    expect(json.data.pk_beta).toBeDefined()
+    expect(json.data.pk_alpha.totalEscrows).toBe(3)
+    expect(json.data.pk_alpha.released).toBe(2)
+    expect(json.data.pk_alpha.successRate).toBe(67)
+    expect(json.data.pk_alpha.totalValueCents).toBe(8000)
+  })
+
+  it('returns empty object for unknown pubkeys', async () => {
+    const res = await app.request('/v2/agents/stats/batch?pubkeys=pk_unknown', { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+    const json = await res.json() as { data: Record<string, unknown> }
+    expect(Object.keys(json.data)).toHaveLength(0)
+  })
+
+  it('requires pubkeys parameter', async () => {
+    const res = await app.request('/v2/agents/stats/batch', { method: 'GET' }, env)
+    expect(res.status).toBe(400)
+  })
+
+  it('limits to 20 pubkeys', async () => {
+    const keys = Array.from({ length: 25 }, (_, i) => `pk_${i}`).join(',')
+    const res = await app.request(`/v2/agents/stats/batch?pubkeys=${keys}`, { method: 'GET' }, env)
+    expect(res.status).toBe(200)
+    // Should not error, just silently truncate
+  })
+})
+
 describe('Replay protection', () => {
   beforeEach(() => {
     mockDb = createMockDb()

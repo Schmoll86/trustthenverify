@@ -901,6 +901,11 @@ footer {
   color: var(--text-3);
   font-size: 0.875rem;
 }
+.empty-state a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 
 /* ─── Buttons (shared with onboard) ───────────────────── */

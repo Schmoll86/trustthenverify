@@ -72,7 +72,7 @@
       <button class="btn-page btn-sm-page" id="agent-search-btn">Search</button>
     </div>
     <div id="agent-list" class="card-grid">
-      <div class="empty-state">Enter a capability to search for agents.</div>
+      <div class="empty-state">Enter a capability to search for agents. Try: <a href="#" class="cap-example" data-cap="code-review">code-review</a>, <a href="#" class="cap-example" data-cap="data-analysis">data-analysis</a>, <a href="#" class="cap-example" data-cap="web-search">web-search</a>.</div>
     </div>
   </div>
 
@@ -170,7 +170,7 @@ function renderPolicies() {
   }
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state">No policies found.</div>'
+    container.innerHTML = '<div class="empty-state">No policies found. <a href="/quickstart">Create one in the quickstart</a>.</div>'
     return
   }
 
@@ -243,16 +243,11 @@ async function searchAgents() {
   container.innerHTML = '<div class="loading-spinner"></div>'
 
   try {
-    // Agent search requires auth
-    if (!session) {
-      container.innerHTML = '<div class="empty-state">Sign in to search agents. <a href="/onboard">Get Started</a></div>'
-      return
-    }
-    const results = await apiGet('/agents/search?capabilities=' + encodeURIComponent(caps))
+    const results = await apiGetPublic('/agents/search?capabilities=' + encodeURIComponent(caps))
     const agents = Array.isArray(results) ? results : []
 
     if (agents.length === 0) {
-      container.innerHTML = '<div class="empty-state">No agents found with those capabilities.</div>'
+      container.innerHTML = '<div class="empty-state">No agents found with those capabilities. <a href="/quickstart">Register your own agent</a> or browse <a href="#" onclick="document.getElementById(\'tab-policies\').click();return false">policies</a>.</div>'
       return
     }
 
@@ -260,18 +255,22 @@ async function searchAgents() {
     agents.forEach(agent => {
       const card = document.createElement('div')
       card.className = 'card'
+      card.dataset.pubkey = agent.publicKey
       card.innerHTML = `
         <div class="card-header">
           <span class="card-title">${escHtml(agent.name) || 'Unnamed'}</span>
           <span class="card-meta">${truncateKey(agent.publicKey)}</span>
         </div>
         <div class="tags">${(agent.capabilities || []).map(c => `<span class="tag">${escHtml(c)}</span>`).join('')}</div>
+        <div class="card-stats" style="font-size:0.6875rem; color:var(--text-3); padding:0.25rem 0"></div>
         <div class="card-footer">
           <a href="/transact?seller=${encodeURIComponent(agent.publicKey)}" class="btn-page btn-sm-page" style="text-decoration:none">Start Escrow</a>
         </div>
       `
       container.appendChild(card)
     })
+    // Batch-fetch stats
+    fetchAgentStats(container)
   } catch (e) {
     container.innerHTML = '<div class="empty-state">Search failed: ' + escHtml(e.message) + '</div>'
   }
@@ -284,6 +283,37 @@ function showMsg(id, text, type) {
   el.className = 'msg show ' + type
   el.textContent = text
 }
+
+// Fetch and inject agent stats
+async function fetchAgentStats(container) {
+  const cards = container.querySelectorAll('[data-pubkey]')
+  if (cards.length === 0) return
+  const pubkeys = Array.from(cards).map(c => c.dataset.pubkey).join(',')
+  try {
+    const stats = await apiGetPublic('/agents/stats/batch?pubkeys=' + encodeURIComponent(pubkeys))
+    cards.forEach(card => {
+      const s = stats[card.dataset.pubkey]
+      if (!s) return
+      const el = card.querySelector('.card-stats')
+      if (!el) return
+      const parts = []
+      if (s.successRate !== null) parts.push(s.successRate + '% success')
+      if (s.totalEscrows > 0) parts.push(s.totalEscrows + ' escrows')
+      if (s.totalValueCents > 0) parts.push('$' + (s.totalValueCents / 100).toFixed(0) + ' volume')
+      el.textContent = parts.join(' \u00b7 ') || ''
+    })
+  } catch { /* stats are non-critical */ }
+}
+
+// Capability example click handlers
+document.addEventListener('click', function(e) {
+  const ex = e.target.closest('.cap-example')
+  if (!ex) return
+  e.preventDefault()
+  document.getElementById('agent-cap-search').value = ex.dataset.cap
+  document.getElementById('tab-agents').click()
+  searchAgents()
+})
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 

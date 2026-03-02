@@ -284,7 +284,7 @@ async function loadEscrows(append) {
     if (!append) list.innerHTML = ''
 
     if (escrows.length === 0 && !append) {
-      list.innerHTML = '<div class="empty-state">No escrows found. <a href="/transact">Create your first transaction.</a></div>'
+      list.innerHTML = '<div class="empty-state">No escrows found. <a href="/transact">Create your first transaction</a> or follow the <a href="/quickstart">quickstart guide</a>.</div>'
     }
 
     escrows.forEach(esc => {

@@ -143,6 +143,62 @@ agents.get('/search', async (c) => {
   })
 })
 
+// GET /agents/stats/batch — batch stats for multiple agents
+agents.get('/stats/batch', async (c) => {
+  const pubkeysParam = c.req.query('pubkeys')
+  if (!pubkeysParam) {
+    return error(c, 400, 'INVALID_PARAMS', 'pubkeys query parameter is required')
+  }
+
+  const pubkeys = pubkeysParam.split(',').map(s => s.trim()).filter(Boolean).slice(0, 20)
+  if (pubkeys.length === 0) {
+    return success(c, {})
+  }
+
+  const db = createDb(c.env)
+
+  // Fetch agents matching these pubkeys
+  const { data: agentRows } = await db
+    .from('agents')
+    .select('id, public_key')
+    .in('public_key', pubkeys)
+
+  if (!agentRows || agentRows.length === 0) {
+    return success(c, {})
+  }
+
+  const agents = agentRows as Array<{ id: string; public_key: string }>
+  const agentIds = agents.map(a => a.id)
+
+  // Fetch escrows involving any of these agents
+  const orFilters = agentIds.map(id => `buyer_id.eq.${id},seller_id.eq.${id}`).join(',')
+  const { data: escrowRows } = await db
+    .from('escrows')
+    .select('status, amount_cents, buyer_id, seller_id')
+    .or(orFilters)
+
+  const escrows = (escrowRows || []) as Array<{ status: string; amount_cents: number; buyer_id: string; seller_id: string }>
+
+  // Build stats per agent
+  const result: Record<string, { totalEscrows: number; released: number; successRate: number | null; totalValueCents: number }> = {}
+
+  for (const agent of agents) {
+    const agentEscrows = escrows.filter(e => e.buyer_id === agent.id || e.seller_id === agent.id)
+    const released = agentEscrows.filter(e => e.status === 'released')
+    const terminal = agentEscrows.filter(e => ['released', 'failed', 'burned', 'expired', 'resolved'].includes(e.status))
+    const totalValueCents = released.reduce((sum, e) => sum + e.amount_cents, 0)
+
+    result[agent.public_key] = {
+      totalEscrows: agentEscrows.length,
+      released: released.length,
+      successRate: terminal.length > 0 ? Math.round((released.length / terminal.length) * 100) : null,
+      totalValueCents,
+    }
+  }
+
+  return success(c, result)
+})
+
 // GET /agents/:pubkey — lookup
 agents.get('/:pubkey', async (c) => {
   const pubkey = c.req.param('pubkey')

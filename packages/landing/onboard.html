@@ -724,6 +724,36 @@ if (savedSession) {
   }
   completePhase('phase-a')
   unlockPhase('phase-b')
+
+  // Auto-check KYC status if returning from Stripe
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('stripe_return') === '1') {
+    // Auto-select seller role and start flow
+    selectedRole = 'seller'
+    document.getElementById('role-seller').classList.add('selected')
+    document.getElementById('consent-check').checked = true
+    document.getElementById('consent-wrap').style.display = ''
+    completePhase('phase-b')
+    unlockPhase('phase-c')
+    document.getElementById('phase-c-title').textContent = 'Complete KYC'
+    document.getElementById('seller-flow').style.display = ''
+    msg('seller-connect-msg', 'Express account created', 'ok')
+    document.getElementById('seller-step-2').style.display = ''
+    msg('seller-status-msg', 'Checking verification status...', 'info')
+
+    // Poll until complete
+    let kycPollInterval = setInterval(async () => {
+      const done = await checkSellerKycStatus()
+      if (done) {
+        clearInterval(kycPollInterval)
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }, 5000)
+    // Also check immediately
+    const done = await checkSellerKycStatus()
+    if (done) clearInterval(kycPollInterval)
+  }
 }
 
 // ── Phase B: Choose Role ──────────────────────────────────────────────────
@@ -799,8 +829,9 @@ async function startStripeFlow() {
 
     // Create Connect account
     try {
+      const returnUrl = window.location.origin + window.location.pathname + '?stripe_return=1'
       const result = await apiPost('/agents/' + keypair.publicKey + '/stripe/connect', {
-        returnUrl: window.location.href,
+        returnUrl,
         refreshUrl: window.location.href,
       })
       msg('seller-connect-msg', 'Express account created', 'ok')
@@ -840,22 +871,27 @@ document.getElementById('buyer-save-card').addEventListener('click', async funct
 })
 
 // Seller: Check Status
-document.getElementById('seller-check-status').addEventListener('click', async function () {
+async function checkSellerKycStatus() {
   try {
     const status = await apiGet('/agents/' + keypair.publicKey + '/stripe/status')
     if (status.onboardingComplete) {
       document.getElementById('seller-step-2').style.display = 'none'
       document.getElementById('seller-done').style.display = ''
       completePhase('phase-c')
+      return true
     } else {
       msg('seller-status-msg', 'Not yet complete. Charges: ' +
         (status.chargesEnabled ? 'yes' : 'no') + ', Payouts: ' +
         (status.payoutsEnabled ? 'yes' : 'no'), 'info')
+      return false
     }
   } catch (e) {
     msg('seller-status-msg', e.message, 'err')
+    return false
   }
-})
+}
+
+document.getElementById('seller-check-status').addEventListener('click', checkSellerKycStatus)
 </script>
 
 </body>
