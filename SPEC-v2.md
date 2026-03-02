@@ -1253,7 +1253,7 @@ POST   /webhooks/stripe                — Stripe webhook (payment_intent.paymen
 - `match`: `any` (default) returns agents with at least one matching capability. `all` returns agents with every listed capability.
 - Results paginated via `?cursor=` token from `meta.cursor` in the response.
 
-~45 endpoints total. The Policies section has 8 endpoints, Oracles has 6, Stripe has 5, x402 has 3, Agent management has 5.
+~52 endpoints total. Policies: 11 (incl. templates, revise, coverage), Oracles: 6, Stripe: 5, x402: 3, Agent management: 7 (incl. verify, spawn), Disputes: 2 (incl. ruling guard), Verification gateway: 1.
 
 **Policy creation is iterative but stateless.** The API is one-shot per call — no server-side sessions. The iteration loop (create → read coverage → revise NL → re-create) happens client-side in the SDK. `POST /policies/:id/revise` creates a new policy row (new UUID) from updated NL intent, linked to the original via `parent_version`. The server re-runs the translation pipeline and returns the new draft. The SDK's `revisePolicy()` helper drives this loop. No server-side conversation state, no WebSocket, no long-lived connections.
 

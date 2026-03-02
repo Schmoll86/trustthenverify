@@ -384,7 +384,10 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/policies` | POST | Signed | Create policy (NL -> formal spec) |
 | `/policies/:id` | GET | None | Get policy |
 | `/policies/:id/activate` | POST | Signed | Activate policy |
+| `/policies/templates` | GET | None | Browse pre-refined policy templates |
 | `/policies/:id/refine` | POST | Signed | Start Argus Codex refinement |
+| `/policies/:id/revise` | POST | Signed | Revise policy with new intent |
+| `/policies/:id/coverage` | GET | None | Clause-to-constraint coverage map |
 | `/escrow/propose` | POST | Signed | Propose escrow |
 | `/escrow/:id` | GET | None | Get escrow status |
 | `/escrow/:id/accept` | POST | Signed | Seller accepts (Stripe: atomic fund; on-chain: deploy contract) |
@@ -394,6 +397,7 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/escrow/:id/dispute` | POST | Signed | Dispute (default: LLM arbitration; opt-in: burn) |
 | `/agents/:pubkey/escrows` | GET | Signed | List agent's escrows (?status, ?role, ?cursor) |
 | `/disputes/:id` | GET | Signed | Get dispute status + ruling |
+| `/disputes/:id/ruling` | POST | — | Manual ruling override (403 — automated only) |
 | `/attestations` | POST | Signed | Publish attestation |
 | `/attestations/:pubkey` | GET | None | Query attestations |
 | `/channels` | POST | Signed | Register payment channel |
@@ -418,9 +422,12 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/agents/:pubkey/update` | POST | Signed | Update agent profile (name, capabilities, endpoint) |
 | `/agents/:pubkey/policies` | GET | Signed | List agent's policies |
 | `/agents/:pubkey/stats` | GET | Signed | Commerce statistics |
+| `/agents/:pubkey/verify` | POST | Signed | Challenge-response agent verification |
+| `/agents/:pubkey/spawn` | POST | Signed | Register child agent (hierarchical) |
 | `/escrow/:id/x402-pay` | POST | Signed | Pay for x402 escrow with USDC tx hash |
 | `/x402/balance/:address` | GET | None | Check USDC balance on Base |
 | `/x402/verify-macaroon` | POST | None | Verify macaroon token signature |
+| `/verify/:escrow_id` | GET | None | Verification gateway status |
 | `/webhooks/stripe` | POST | Stripe sig | Stripe webhook (payment failures, account updates) |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.
