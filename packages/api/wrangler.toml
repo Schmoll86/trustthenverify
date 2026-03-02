@@ -44,12 +44,15 @@ API_VERSION = "v2"
 ARBITRATION_MODEL = "google/gemini-2.5-flash"
 BASE_CHAIN_ID = "8453"
 ESCROW_FACTORY_ADDRESS = "0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e"
-USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+USDC_CONTRACT_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 TRANSLATOR_MODEL = "google/gemini-2.5-flash"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"
 
 # Secrets (set via `wrangler secret put`):
 # GATEWAY_EOA_PRIVATE_KEY — secp256k1 key for on-chain gateway signatures (falls back to GATEWAY_PRIVATE_KEY)
+# STRIPE_WEBHOOK_SECRET — Stripe webhook signature verification
+# Optional x402 tuning (defaults work):
+# X402_SETTLEMENT_FEE_BPS — settlement fee in basis points (default: 100 = 1%)
 
 # ─── Staging environment (Base Sepolia testnet) ─────────────────────────────
 [env.staging]
@@ -63,7 +66,7 @@ API_VERSION = "v2"
 BASE_RPC_URL = "https://sepolia.base.org"
 BASE_CHAIN_ID = "84532"
 ESCROW_FACTORY_ADDRESS = "0xE1E21350E4807adB472fbBb904Cd2Da75Eb77e1e"
-USDC_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+USDC_CONTRACT_ADDRESS = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 ARBITRATION_MODEL = "google/gemini-2.5-flash"
 TRANSLATOR_MODEL = "google/gemini-2.5-flash"
 CROSS_VALIDATOR_MODEL = "google/gemini-2.5-flash-lite"

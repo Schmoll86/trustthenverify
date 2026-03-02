@@ -19,6 +19,7 @@
  *
  * In Stripe mode (Phase 1), accept is atomic: proposed → active.
  * In on-chain mode (Phase 4), accept → accepted → funded → active.
+ * In x402 mode, x402_pay is atomic: proposed → active (buyer pays USDC).
  * Phase 2 adds automated verification: delivered → released / failed.
  * Phase 8 adds arbitration: active/delivered → disputed → released/failed.
  */
@@ -48,11 +49,13 @@ export type EscrowAction =
   | 'dispute_arbitrate' // either party disputes (arbitrate mode)
   | 'ruling_buyer'    // arbitrator rules buyer wins
   | 'ruling_seller'   // arbitrator rules seller wins
+  | 'x402_pay'        // buyer pays via x402 → proposed → active (atomic)
   | 'timeout'         // cron: expires_at reached
 
 const TRANSITIONS: Record<string, EscrowStatus> = {
   'proposed:accept': 'active',
   'proposed:accept_onchain': 'accepted',
+  'proposed:x402_pay': 'active',
   'proposed:timeout': 'expired',
   'accepted:fund': 'funded',
   'accepted:timeout': 'expired',

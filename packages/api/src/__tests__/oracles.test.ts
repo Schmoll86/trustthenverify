@@ -43,6 +43,10 @@ function seedAgents() {
       parent_id: null,
       created_at: '2025-01-01T00:00:00Z',
       last_seen_at: '2025-01-01T00:00:00Z',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'oracle2-agent-id',
@@ -54,6 +58,10 @@ function seedAgents() {
       parent_id: null,
       created_at: '2025-01-01T00:00:00Z',
       last_seen_at: '2025-01-01T00:00:00Z',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'buyer-agent-id',
@@ -65,6 +73,10 @@ function seedAgents() {
       parent_id: null,
       created_at: '2025-01-01T00:00:00Z',
       last_seen_at: '2025-01-01T00:00:00Z',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'seller-agent-id',
@@ -76,6 +88,10 @@ function seedAgents() {
       parent_id: null,
       created_at: '2025-01-01T00:00:00Z',
       last_seen_at: '2025-01-01T00:00:00Z',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
   ])
 }

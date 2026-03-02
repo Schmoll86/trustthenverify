@@ -12,6 +12,7 @@ graph TD
 
     API --> |"Stripe mode<br/>(default)"| STRIPE["Stripe Connect<br/>Dual-PI Escrow<br/>Express accounts"]
     API --> |"On-chain mode"| BASE["Base Mainnet L2<br/>EscrowFactory + PaymentChannel<br/>USDC settlement"]
+    API --> |"x402 mode<br/>(instant USDC)"| X402["x402 Custodial Gateway<br/>Direct USDC transfer<br/>Macaroon receipt tokens"]
 
     API --> VERIFY["Constraint Solver<br/>Tier 1: 15 deterministic types, under 1ms<br/>Tier 2: 3 semantic types, under 50ms"]
 
@@ -24,6 +25,7 @@ graph TD
     QUEUE --> ARGUS["Argus Codex<br/>Adversarial Policy Refinement<br/>10 rounds, auto-approve ≥0.9"]
     QUEUE --> ORACLE["Oracle Consensus<br/>5 oracles, quorum 3<br/>30min timeout"]
     QUEUE --> EMAIL["Email Notifications<br/>Resend REST API<br/>Escrow state transitions"]
+    QUEUE --> WEBHOOK["Agent Webhooks<br/>HMAC-SHA256 signed<br/>Instant event delivery"]
 
     SDK --> |"publish attestations"| NOSTR["Nostr Relays<br/>NIP-78 Observations"]
     SDK --> |"local trust"| LOCAL["Local Trust Store<br/>suggestCollateral()"]
@@ -46,11 +48,11 @@ graph TD
 
     class API,SDK,MCP core
     class DB,QUEUE,KV storage
-    class STRIPE,BASE settlement
+    class STRIPE,BASE,X402 settlement
     class VERIFY,WAI,ARGUS,ORACLE verification
     class NOSTR,LOCAL p2p
     class OPENROUTER,GEMINI_FLASH,GEMINI_LITE,LLM_JUDGE llm
     class FACTORY,ESCROW_INST,CHANNEL contracts
-    class SENTRY,EMAIL ops
+    class SENTRY,EMAIL,WEBHOOK ops
     class LANDING,KEYMGMT frontend
 ```

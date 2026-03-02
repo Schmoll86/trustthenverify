@@ -57,6 +57,14 @@ export const SELECTORS = {
   'amount()': 'aa8c217c',
   'collateral()': 'd8dfeb45',
   'deadline()': '29dcb0cf',
+  // ERC-20 functions
+  'transfer(address,uint256)': 'a9059cbb',
+  'balanceOf(address)': '70a08231',
+} as Record<string, string>
+
+// Full keccak256 event topics (32 bytes, not truncated)
+export const EVENT_TOPICS = {
+  'Transfer(address,address,uint256)': 'ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
 } as Record<string, string>
 
 /** Decode a uint256 from a hex string (32 bytes). */

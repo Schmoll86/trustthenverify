@@ -712,6 +712,51 @@ agents.post('/:pubkey/notifications', async (c) => {
   return success(c, snakeToCamel<Agent>(updated))
 })
 
+// POST /agents/:pubkey/webhook — register webhook for instant notifications
+agents.post('/:pubkey/webhook', async (c) => {
+  const pubkey = c.req.param('pubkey')
+  const callerPubkey = c.get('agentPubkey')
+
+  if (callerPubkey !== pubkey) {
+    return error(c, 403, 'FORBIDDEN', 'Can only register webhooks for your own agent')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { url: string }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  if (!body.url || typeof body.url !== 'string') {
+    return error(c, 400, 'INVALID_PARAMS', 'url is required')
+  }
+
+  // Validate URL format
+  try {
+    new URL(body.url)
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'url must be a valid URL')
+  }
+
+  const db = createDb(c.env)
+  const webhookSecret = crypto.randomUUID()
+
+  const { data: updated, error: dbError } = await db
+    .from('agents')
+    .update({ webhook_url: body.url, webhook_secret: webhookSecret })
+    .eq('public_key', pubkey)
+    .select()
+    .single()
+
+  if (dbError || !updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to register webhook')
+  }
+
+  return success(c, { webhookUrl: body.url, webhookSecret })
+})
+
 // POST /agents/:pubkey/stripe/payment-method — attach payment method to Customer
 agents.post('/:pubkey/stripe/payment-method', async (c) => {
   const pubkey = c.req.param('pubkey')

@@ -75,6 +75,10 @@ function seedTestData(buyer: { publicKey: string }, seller: { publicKey: string 
       stripe_connected_account_id: null,
       stripe_onboarding_complete: false,
       stripe_default_payment_method: 'pm_buyer',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'seller-id',
@@ -90,6 +94,10 @@ function seedTestData(buyer: { publicKey: string }, seller: { publicKey: string 
       stripe_connected_account_id: 'acct_seller',
       stripe_onboarding_complete: true,
       stripe_default_payment_method: 'pm_seller',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
   ])
 }
@@ -110,6 +118,7 @@ function seedActiveEscrow(opts?: { disputeResolution?: string }) {
       dispute_resolution: opts?.disputeResolution ?? 'arbitrate',
       status: 'active',
       proof: null,
+      deliverable: { text: 'Here is a poem about testing' },
       created_at: new Date().toISOString(),
       funded_at: new Date().toISOString(),
       completed_at: null,
@@ -130,6 +139,11 @@ function seedActiveEscrow(opts?: { disputeResolution?: string }) {
       stripe_transfer_id: null,
       buyer_payment_method_id: null,
       seller_payment_method_id: null,
+      oracle_fee_cents: 0,
+      x402_tx_hash: null,
+      x402_macaroon: null,
+      x402_settlement_fee_cents: 0,
+      x402_seller_payout_tx: null,
     },
   ])
   mockDb.seedTable('disputes', [])

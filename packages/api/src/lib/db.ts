@@ -34,6 +34,9 @@ export interface Env {
   // Monitoring & notifications
   SENTRY_DSN?: string
   EMAIL_API_KEY?: string
+  // x402 payment
+  X402_SETTLEMENT_FEE_BPS?: string  // default '100' (1%)
+  USDC_CONTRACT_ADDRESS?: string    // default Base mainnet USDC
 }
 
 /** Create a Supabase client per-request from Workers env bindings. */

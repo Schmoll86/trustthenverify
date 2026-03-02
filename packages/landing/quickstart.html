@@ -369,42 +369,17 @@ console.log(released.status) <span class="cm">// 'released'</span></div>
 </footer>
 
 <script type="module">
-import { getPublicKey, signAsync } from 'https://esm.sh/@noble/secp256k1@3'
-import { sha256 } from 'https://esm.sh/@noble/hashes@2/sha2'
-import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
-import { initMobileNav } from './ttv-lib.js'
+import { initMobileNav, generateKeypair, ecdsaHeaders, getPublicKey, bytesToHex } from './ttv-lib.js'
 
 initMobileNav()
 
 const API = 'https://sandbox.trustthenverify.com/v2'
 
-// ── Crypto helpers ──────────────────────────────────────────────────────────
-
-function generateKeypair() {
-  const priv = new Uint8Array(32)
-  crypto.getRandomValues(priv)
-  const pub = getPublicKey(priv, true)
-  return { privateKey: bytesToHex(priv), publicKey: bytesToHex(pub) }
-}
-
-async function ecdsaHeaders(keypair, method, path, bodyStr) {
-  const ts = Math.floor(Date.now() / 1000)
-  const encoder = new TextEncoder()
-  const bodyHash = bytesToHex(sha256(encoder.encode(bodyStr || '')))
-  const canonical = `${ts}\n${method}\n${path}\n${bodyHash}`
-  const msgHash = sha256(encoder.encode(canonical))
-  const sig = await signAsync(msgHash, hexToBytes(keypair.privateKey), { prehash: false })
-  return {
-    'Content-Type': 'application/json',
-    'X-Agent-Pubkey': keypair.publicKey,
-    'X-Agent-Timestamp': String(ts),
-    'X-Agent-Signature': bytesToHex(sig.toCompactRawBytes()),
-  }
-}
+// ── API helpers (use keypair param, not session-based auth) ─────────────────
 
 async function apiPost(path, body, keypair) {
   const bodyStr = JSON.stringify(body)
-  const headers = await ecdsaHeaders(keypair, 'POST', path, bodyStr)
+  const headers = await ecdsaHeaders('POST', path, bodyStr, keypair)
   const res = await fetch(API + path, { method: 'POST', headers, body: bodyStr })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
@@ -412,7 +387,7 @@ async function apiPost(path, body, keypair) {
 }
 
 async function apiGet(path, keypair) {
-  const headers = await ecdsaHeaders(keypair, 'GET', path, '')
+  const headers = await ecdsaHeaders('GET', path, '', keypair)
   const res = await fetch(API + path, { headers })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
@@ -563,7 +538,10 @@ document.getElementById('run-5').addEventListener('click', async function () {
       },
     }, sellerKeys)
 
-    showResult(5, `Verification: ${result.result}\nConstraints: ${result.constraintsPassed}/${result.constraintsTotal} passed`, 'ok')
+    const display = result.constraintsTotal != null
+      ? `Verification: ${result.result}\nConstraints: ${result.constraintsPassed}/${result.constraintsTotal} passed`
+      : `Deliverable submitted\nEscrow ${result.id} | Status: ${result.status}`
+    showResult(5, display, 'ok')
     completeStep(5)
   } catch (e) {
     showResult(5, e.message, 'err')

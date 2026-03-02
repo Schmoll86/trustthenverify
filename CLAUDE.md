@@ -119,6 +119,11 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - Clean URLs via `_redirects`: `/dashboard`, `/transact`, `/marketplace`, `/recover`, `/terms`, `/privacy`
 - **Hostname-aware API URL:** Pages that use `apiGetPublic()` without a session detect production hostname and call `setEnv('production')` so public API calls hit `api.trustthenverify.com` instead of defaulting to sandbox.
 - **Deployment requires BOTH:** `wrangler deploy` (API Worker) AND `npx wrangler pages deploy packages/landing --project-name=trustthenverify` (static Pages). Missing the Pages deploy leaves new/updated HTML pages undeployed.
+- **CRITICAL: No inline crypto.** All landing pages MUST import crypto/auth functions from `ttv-lib.js` — never duplicate `ecdsaHeaders`, `generateKeypair`, `exportKeyBundle`, etc. inline. The `ecdsaHeaders()` function is now exported from ttv-lib.js. Signature: `ecdsaHeaders(method, path, bodyStr, session)`.
+- **Escrow deliverable storage:** Migration `012_escrow_deliverable.sql` adds `deliverable JSONB` column to escrows table. The deliver handler stores the full deliverable JSON (not just the proof hash). The arbitrator receives `escrowRow.deliverable` instead of null.
+- **Seller collateral default:** API defaults to 50% of `amountCents` per SPEC §2.2 (was incorrectly 0). SDK already sends `sellerCollateral` explicitly via `collateralRatio`.
+- **Error codes:** Expired escrow → `408 ESCROW_EXPIRED` (was `409 EXPIRED`). Invalid state for delivery → `409 ALREADY_COMPLETED` (was `409 INVALID_STATE`).
+- **Transact page:** Includes collateral ratio dropdown (25%/50%/75%/100%), sends `sellerCollateral` in API call.
 
 ## Email Notifications
 - **Queue-based dispatch:** Escrow state transitions enqueue `{ type: 'notification', agentId, eventType, escrowId, payload }` to `QUEUE`.
@@ -146,7 +151,26 @@ Escrow + verification protocol for autonomous AI agent commerce. Agents register
 - **CSP:** `_headers` file sets `Content-Security-Policy` on all Pages responses. `script-src 'self' 'unsafe-inline' https://esm.sh` (inline needed for module scripts + hamburger onclick). `connect-src` allows both API domains. `frame-ancestors 'none'` prevents clickjacking.
 - **BASE_RPC_URL:** Moved from `wrangler.toml [vars]` to `wrangler secret put` — contains Alchemy API key, must not be in version control.
 
+## x402 Payment Rail (USDC on Base)
+- **Mode:** `fundingMode: 'x402'` — agents send USDC on Base L2 to TTV gateway, TTV verifies on-chain, mints macaroon, holds custodially, settles to seller on release.
+- **Flow:** `proposeEscrow(x402)` → agent sends USDC → `POST /escrow/:id/x402-pay { txHash }` → TTV verifies Transfer event in tx receipt → mints macaroon → escrow active. On confirm/release, TTV sends USDC to seller (minus 1% fee).
+- **Service:** `packages/api/src/lib/x402.ts` — interface + `RealX402Service`. Follows `StripeService`/`OnchainService` pattern.
+- **Public routes:** `GET /v2/x402/balance/:address` (USDC balance), `POST /v2/x402/verify-macaroon` (free, no auth).
+- **Macaroon:** Base64url-encoded JSON payload + secp256k1 signature. Payload: `{ escrowId, buyerAddress, sellerAddress, amountCents, issuedAt, expiresAt, nonce }`.
+- **Settlement fee:** 1% default, configurable via `X402_SETTLEMENT_FEE_BPS` env var (100 = 1%).
+- **Address derivation:** x402 auto-derives buyer/seller Ethereum addresses from their secp256k1 public keys via `publicKeyToAddress()`.
+- **SDK methods:** `x402Pay(escrowId, txHash)`, `getEthAddress()`, `checkUsdcBalance(address?)`, `registerWebhook(url)`.
+- **MCP tools:** `trust_x402_pay`, `trust_x402_balance`, `trust_x402_address`, `trust_register_webhook`.
+- **Migration:** `013_x402_and_webhooks.sql` — x402 columns on escrows, webhook columns on agents, `x402_receipts` audit table.
+- **Env vars:** `X402_SETTLEMENT_FEE_BPS` (optional, default '100'), `USDC_CONTRACT_ADDRESS` (optional, defaults to Base Mainnet USDC).
+
+## Webhook Notifications
+- **Registration:** `POST /v2/agents/:pubkey/webhook { url }` — stores webhook URL + generates HMAC secret.
+- **Delivery:** Notification consumer sends POST to webhook URL with HMAC-SHA256 signature in `X-TTV-Signature` header.
+- **KYC notification:** Stripe `account.updated` with chargesEnabled enqueues `kyc.complete` event.
+- **Events delivered:** All escrow events + `kyc.complete`.
+
 ## Before Committing
 - `npm run build --workspace=packages/sdk` must succeed
 - `npm run typecheck --workspace=packages/api` must succeed
-- `npm test --workspaces -- --run` must pass (520 tests: 471 API + 36 SDK + 13 MCP)
+- `npm test --workspaces -- --run` must pass (637 tests: 545 API + 79 SDK + 13 MCP)

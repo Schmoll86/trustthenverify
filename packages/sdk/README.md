@@ -57,6 +57,7 @@ console.log(released.status) // 'released'
 | `queryAttestations(pubkey, options?)` | Query attestations for an agent |
 | `getPolicy(policyId)` | Get a policy by ID |
 | `getPolicyTemplates()` | List policy templates |
+| `listMarketplacePolicies(params?)` | Browse community-shared policies |
 
 ### TrustProtocol (authenticated)
 
@@ -66,6 +67,8 @@ console.log(released.status) // 'released'
 |--------|-------------|
 | `verify(pubkey)` | Challenge-response identity verification |
 | `spawnAgent(params)` | Register a child agent |
+| `updateAgent(params)` | Update agent profile (name, capabilities, endpoint, metadata) |
+| `getStats()` | Commerce statistics (escrow counts, amounts, completion rate) |
 
 #### Policies
 
@@ -77,6 +80,8 @@ console.log(released.status) // 'released'
 | `activatePolicy(policyId)` | Activate a validated policy |
 | `refinePolicy(policyId, params?)` | Start Argus Codex adversarial refinement |
 | `refinementStatus(policyId)` | Check refinement progress |
+| `listPolicies(params?)` | List your policies |
+| `useMarketplacePolicy(policyId)` | Clone a marketplace policy for your use |
 
 #### Escrow
 
@@ -85,11 +90,13 @@ console.log(released.status) // 'released'
 | `suggestCollateral(pubkey, amount)` | Get collateral ratio from trust model |
 | `proposeEscrow(params)` | Propose a transaction with escrow |
 | `getEscrow(escrowId)` | Check escrow status |
+| `listEscrows(params?)` | List your escrows (?status, ?role, ?cursor) |
 | `acceptEscrow(escrowId)` | Accept as seller |
 | `fundEscrow(escrowId)` | Notify on-chain funding submitted |
 | `deliver(escrowId, deliverable)` | Submit deliverable for verification |
 | `confirmDelivery(escrowId)` | Buyer confirms (buyer_confirm method) |
 | `getVerification(escrowId)` | Get verification result |
+| `x402Pay(escrowId, txHash)` | Pay for x402 escrow with USDC tx hash |
 
 #### Disputes
 
@@ -116,6 +123,31 @@ console.log(released.status) // 'released'
 | `getOracleAssignments()` | Get pending oracle tasks |
 | `submitOracleVote(params)` | Vote on an oracle task |
 | `getOracleTask(taskId)` | Get oracle task details |
+| `getOracleEarnings()` | Accumulated oracle earnings (pending + paid) |
+
+#### Stripe
+
+| Method | Description |
+|--------|-------------|
+| `setupStripeCustomer()` | Create Stripe Customer (buyer) |
+| `createSetupIntent()` | Create SetupIntent for card collection |
+| `attachPaymentMethod(pmId)` | Attach payment method to customer |
+| `setupStripeConnect()` | Create Express account for seller KYC |
+| `getStripeStatus()` | Check Stripe onboarding status |
+
+#### x402 USDC (Base L2)
+
+| Method | Description |
+|--------|-------------|
+| `x402Pay(escrowId, txHash)` | Pay for x402 escrow with USDC tx hash |
+| `getEthAddress()` | Get Ethereum address derived from agent key |
+| `checkUsdcBalance(address?)` | Check USDC balance on Base |
+
+#### Webhooks
+
+| Method | Description |
+|--------|-------------|
+| `registerWebhook(url)` | Register webhook URL for instant event notifications |
 
 #### Local Trust Model
 

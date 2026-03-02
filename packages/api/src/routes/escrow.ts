@@ -14,6 +14,8 @@ import { RealOnchainService } from '../lib/onchain'
 import type { ArbitrationService } from '../lib/arbitration-service'
 import { RealArbitrationService } from '../lib/arbitration-service'
 import { RealLLMService } from '../lib/openrouter'
+import type { X402Service } from '../lib/x402'
+import { RealX402Service } from '../lib/x402'
 import type { Escrow } from '@trustthenverify/sdk'
 import type { EscrowRow, AgentRow } from '../lib/types'
 
@@ -28,6 +30,7 @@ type AppEnv = {
     gateway?: GatewayService
     onchain?: OnchainService
     arbitration?: ArbitrationService
+    x402?: X402Service
   }
 }
 
@@ -88,6 +91,18 @@ function getArbitration(c: { env: Env; get(key: 'arbitration'): ArbitrationServi
   return new RealArbitrationService(llm, model)
 }
 
+/** Get or create X402Service. Tests inject via c.set('x402', mock). */
+function getX402(c: { env: Env; get(key: 'x402'): X402Service | undefined }): X402Service {
+  const injected = c.get('x402')
+  if (injected) return injected
+  return new RealX402Service(
+    c.env.BASE_RPC_URL ?? 'https://mainnet.base.org',
+    c.env.GATEWAY_EOA_PRIVATE_KEY ?? c.env.GATEWAY_PRIVATE_KEY ?? '',
+    parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10),
+    c.env.USDC_CONTRACT_ADDRESS,
+  )
+}
+
 // ── GET /escrow/:id — fetch escrow status (public, no auth) ──────────────────
 
 escrow.get('/:id', async (c) => {
@@ -120,7 +135,7 @@ escrow.post('/propose', async (c) => {
     verificationMethod?: string
     timeoutSeconds?: number
     disputeResolution?: string
-    fundingMode?: 'stripe' | 'onchain'
+    fundingMode?: 'stripe' | 'onchain' | 'x402'
     buyerAddress?: string
     sellerAddress?: string
     buyerPaymentMethodId?: string
@@ -161,10 +176,23 @@ escrow.post('/propose', async (c) => {
 
   const db = createDb(c.env)
 
+  // Stripe fail-fast: check buyer has payment method before creating escrow
+  if (fundingMode === 'stripe' && !c.get('sandboxMode')) {
+    const { data: buyerAgent } = await db
+      .from('agents')
+      .select('stripe_customer_id, stripe_default_payment_method')
+      .eq('id', buyerId)
+      .single()
+    const bRow = buyerAgent as { stripe_customer_id: string | null; stripe_default_payment_method: string | null } | null
+    if (!bRow?.stripe_customer_id || (!bRow.stripe_default_payment_method && !body.buyerPaymentMethodId)) {
+      return error(c, 400, 'PAYMENT_NOT_CONFIGURED', 'Buyer must set up Stripe Customer and attach a payment method before proposing a Stripe escrow')
+    }
+  }
+
   // Verify seller exists
   const { data: seller } = await db
     .from('agents')
-    .select('id')
+    .select('id, public_key')
     .eq('public_key', body.seller)
     .single()
 
@@ -175,6 +203,16 @@ escrow.post('/propose', async (c) => {
   // Buyer != seller
   if (seller.id === buyerId) {
     return error(c, 400, 'INVALID_PARAMS', 'Buyer and seller must be different agents')
+  }
+
+  // x402: auto-derive addresses from agent public keys
+  let buyerAddress = body.buyerAddress ?? null
+  let sellerAddress = body.sellerAddress ?? null
+  if (fundingMode === 'x402') {
+    const { publicKeyToAddress } = await import('@trustthenverify/sdk')
+    const callerPubkey = c.get('agentPubkey')
+    if (callerPubkey) buyerAddress = publicKeyToAddress(callerPubkey)
+    sellerAddress = publicKeyToAddress((seller as { public_key: string }).public_key)
   }
 
   const taskHash = sha256Hex(JSON.stringify(body.taskSpec))
@@ -194,7 +232,7 @@ escrow.post('/propose', async (c) => {
       buyer_id: buyerId,
       seller_id: seller.id,
       amount_cents: body.amountCents,
-      seller_collateral: body.sellerCollateral ?? 0,
+      seller_collateral: body.sellerCollateral ?? Math.round(body.amountCents * 0.5),
       task_hash: taskHash,
       task_spec: body.taskSpec,
       policy_id: body.policyId ?? null,
@@ -204,9 +242,9 @@ escrow.post('/propose', async (c) => {
       timeout_seconds: timeoutSeconds,
       expires_at: expiresAt,
       funding_mode: fundingMode,
-      buyer_address: body.buyerAddress ?? null,
-      seller_address: body.sellerAddress ?? null,
-      chain_id: fundingMode === 'onchain' ? parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10) : null,
+      buyer_address: buyerAddress,
+      seller_address: sellerAddress,
+      chain_id: (fundingMode === 'onchain' || fundingMode === 'x402') ? parseInt(c.env.BASE_CHAIN_ID ?? '8453', 10) : null,
       buyer_payment_method_id: body.buyerPaymentMethodId ?? null,
       oracle_fee_cents: oracleFeeCents,
     })
@@ -217,12 +255,151 @@ escrow.post('/propose', async (c) => {
     return error(c, 500, 'INTERNAL_ERROR', 'Failed to create escrow')
   }
 
+  const escrowId = (row as Record<string, unknown>).id as string
+
   // Notify seller of new proposal
-  await enqueueNotification(c.env, seller.id as string, 'escrow.proposed', (row as Record<string, unknown>).id as string, {
+  await enqueueNotification(c.env, seller.id as string, 'escrow.proposed', escrowId, {
     amountCents: body.amountCents, status: 'proposed',
   })
 
+  // x402: include payment instructions in response
+  if (fundingMode === 'x402') {
+    const x402Svc = getX402(c as unknown as { env: Env; get(key: 'x402'): X402Service | undefined })
+    const instructions = x402Svc.generatePaymentInstructions(escrowId, body.amountCents, expiresAt)
+    instructions.gatewayAddress = await x402Svc.getGatewayAddress()
+    const camelRow = snakeToCamel<Escrow>(row)
+    return success(c, { ...camelRow, x402PaymentInstructions: instructions }, 201)
+  }
+
   return success(c, snakeToCamel<Escrow>(row), 201)
+})
+
+// ── POST /escrow/:id/x402-pay — buyer pays via USDC on Base ──────────────────
+
+escrow.post('/:id/x402-pay', async (c) => {
+  const escrowId = c.req.param('id')
+  const callerId = c.get('agentId')
+  if (!callerId) {
+    return error(c, 401, 'UNAUTHORIZED', 'Authentication required')
+  }
+
+  const rawBody = c.get('rawBody')
+  let body: { txHash: string }
+  try {
+    body = JSON.parse(rawBody || '{}')
+  } catch {
+    return error(c, 400, 'INVALID_PARAMS', 'Invalid JSON body')
+  }
+
+  if (!body.txHash || typeof body.txHash !== 'string') {
+    return error(c, 400, 'INVALID_PARAMS', 'txHash is required')
+  }
+
+  const db = createDb(c.env)
+
+  const { data: row } = await db
+    .from('escrows')
+    .select('*')
+    .eq('id', escrowId)
+    .single()
+
+  if (!row) {
+    return error(c, 404, 'NOT_FOUND', `Escrow not found: ${escrowId}`)
+  }
+
+  const escrowRow = row as EscrowRow
+
+  // Must be buyer
+  if (escrowRow.buyer_id !== callerId) {
+    return error(c, 403, 'FORBIDDEN', 'Only the buyer can pay for this escrow')
+  }
+
+  // Must be x402 mode
+  if (escrowRow.funding_mode !== 'x402') {
+    return error(c, 400, 'INVALID_PARAMS', 'x402-pay is only for x402 funding mode escrows')
+  }
+
+  // Must be proposed
+  if (!canTransition(escrowRow.status as 'proposed', 'x402_pay')) {
+    return error(c, 409, 'INVALID_STATE', `Cannot pay in status: ${escrowRow.status}`)
+  }
+
+  // Check if proposal has expired
+  if (new Date(escrowRow.expires_at) < new Date()) {
+    return error(c, 409, 'EXPIRED', 'Escrow proposal has expired')
+  }
+
+  const x402Svc = getX402(c as unknown as { env: Env; get(key: 'x402'): X402Service | undefined })
+
+  // Convert cents to USDC 6-decimal units
+  const expectedAmountUsdc = BigInt(escrowRow.amount_cents) * 10000n
+  const buyerAddress = escrowRow.buyer_address ?? ''
+
+  // Verify on-chain payment (skip in sandbox)
+  if (!c.get('sandboxMode')) {
+    try {
+      const result = await x402Svc.verifyPayment(body.txHash, buyerAddress, expectedAmountUsdc, escrowId)
+
+      // Insert receipt for audit trail
+      await db.from('x402_receipts').insert({
+        escrow_id: escrowId,
+        tx_hash: body.txHash,
+        from_address: result.from,
+        to_address: result.to,
+        amount_usdc: Number(result.amount),
+        block_number: Number(result.blockNumber),
+        macaroon: '', // Updated after minting
+      })
+    } catch (verifyErr) {
+      const msg = verifyErr instanceof Error ? verifyErr.message : String(verifyErr)
+      return error(c, 400, 'PAYMENT_VERIFICATION_FAILED', msg)
+    }
+  }
+
+  // Mint macaroon
+  const nonce = crypto.randomUUID()
+  let macaroon = 'sandbox_mock_macaroon'
+  if (!c.get('sandboxMode')) {
+    macaroon = await x402Svc.mintMacaroon(
+      escrowId,
+      buyerAddress,
+      escrowRow.seller_address ?? '',
+      escrowRow.amount_cents,
+      nonce,
+    )
+
+    // Update receipt with macaroon
+    await db.from('x402_receipts').update({ macaroon }).eq('tx_hash', body.txHash)
+  }
+
+  // Transition proposed → active
+  const timeoutSeconds = escrowRow.timeout_seconds ?? 3600
+  const newExpiresAt = new Date(Date.now() + timeoutSeconds * 1000).toISOString()
+
+  const { data: updated } = await db
+    .from('escrows')
+    .update({
+      status: 'active',
+      x402_tx_hash: body.txHash,
+      x402_macaroon: macaroon,
+      funded_at: new Date().toISOString(),
+      expires_at: newExpiresAt,
+    })
+    .eq('id', escrowId)
+    .select()
+    .single()
+
+  if (!updated) {
+    return error(c, 500, 'INTERNAL_ERROR', 'Failed to update escrow')
+  }
+
+  // Notify seller that escrow is funded and active
+  await enqueueNotification(c.env, escrowRow.seller_id, 'escrow.accepted', escrowId, {
+    amountCents: escrowRow.amount_cents, status: 'active', fundingMode: 'x402',
+  })
+
+  const camelRow = snakeToCamel<Escrow>(updated)
+  return success(c, { ...camelRow, x402Macaroon: macaroon })
 })
 
 // ── POST /escrow/:id/accept — seller accepts + funds atomically ──────────────
@@ -512,12 +689,12 @@ escrow.post('/:id/deliver', async (c) => {
 
   // Must be active
   if (!canTransition(escrowRow.status as 'active', 'deliver')) {
-    return error(c, 409, 'INVALID_STATE', `Cannot deliver in status: ${escrowRow.status}`)
+    return error(c, 409, 'ALREADY_COMPLETED', `Cannot deliver in status: ${escrowRow.status}`)
   }
 
   // Check expiry
   if (new Date(escrowRow.expires_at) < new Date()) {
-    return error(c, 409, 'EXPIRED', 'Escrow has expired')
+    return error(c, 408, 'ESCROW_EXPIRED', 'Escrow has expired')
   }
 
   const proof = sha256Hex(JSON.stringify(body.deliverable))
@@ -530,6 +707,7 @@ escrow.post('/:id/deliver', async (c) => {
     .update({
       status: 'delivered',
       proof,
+      deliverable: body.deliverable,
       delivery_attempts: attempts,
     })
     .eq('id', escrowId)
@@ -591,7 +769,22 @@ escrow.post('/:id/deliver', async (c) => {
 
     if (vResult.result === 'pass') {
       // Auto-release funds
-      if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
+      if (escrowRow.funding_mode === 'x402') {
+        const feeBps = parseInt(c.env.X402_SETTLEMENT_FEE_BPS ?? '100', 10)
+        const feeCents = Math.round(escrowRow.amount_cents * feeBps / 10000)
+        const netCents = escrowRow.amount_cents - feeCents
+        const netUsdc = BigInt(netCents) * 10000n
+        const x402Svc = getX402(c as unknown as { env: Env; get(key: 'x402'): X402Service | undefined })
+        try {
+          const { txHash: payoutTx } = await x402Svc.settleToSeller(escrowRow.seller_address ?? '', netUsdc, escrowId)
+          await db.from('escrows').update({
+            x402_seller_payout_tx: payoutTx,
+            x402_settlement_fee_cents: feeCents,
+          }).eq('id', escrowId)
+        } catch (settleErr) {
+          console.error('[escrow-deliver] x402 settlement failed (deferred):', (settleErr as Error).message)
+        }
+      } else if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
         const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
         const gw = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
         if (gw.signForChain) {
@@ -731,6 +924,22 @@ escrow.post('/:id/confirm', async (c) => {
   // Release funds — branch by funding mode (skip in sandbox)
   if (c.get('sandboxMode')) {
     // Sandbox: skip real payment calls
+  } else if (escrowRow.funding_mode === 'x402') {
+    // x402: settle USDC to seller (minus fee)
+    const feeBps = parseInt(c.env.X402_SETTLEMENT_FEE_BPS ?? '100', 10)
+    const feeCents = Math.round(escrowRow.amount_cents * feeBps / 10000)
+    const netCents = escrowRow.amount_cents - feeCents
+    const netUsdc = BigInt(netCents) * 10000n // cents → 6-decimal USDC
+    const x402Svc = getX402(c as unknown as { env: Env; get(key: 'x402'): X402Service | undefined })
+    try {
+      const { txHash: payoutTx } = await x402Svc.settleToSeller(escrowRow.seller_address ?? '', netUsdc, escrowId)
+      await db.from('escrows').update({
+        x402_seller_payout_tx: payoutTx,
+        x402_settlement_fee_cents: feeCents,
+      }).eq('id', escrowId)
+    } catch (settleErr) {
+      console.error('[escrow-confirm] x402 settlement failed (deferred):', (settleErr as Error).message)
+    }
   } else if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
     // On-chain: buyer confirms directly on contract (this API call just records the verification)
     // The actual fund transfer happens on-chain via confirmDelivery()
@@ -957,7 +1166,7 @@ escrow.post('/:id/dispute', async (c) => {
       disputeReason: body.reason ?? 'No reason provided',
       initiatorRole: initiatorRole as 'buyer' | 'seller',
       amountCents: escrowRow.amount_cents,
-      deliverable: escrowRow.proof ? null : null, // proof hash only, no deliverable stored
+      deliverable: escrowRow.deliverable ?? null,
     })
   } catch (err) {
     // LLM failed — leave dispute open for retry

@@ -114,6 +114,16 @@
     </div>
 
     <div class="form-group">
+      <label for="collateral-select">Seller Collateral</label>
+      <select class="form-select" id="collateral-select">
+        <option value="0.25">25%</option>
+        <option value="0.5" selected>50% (default)</option>
+        <option value="0.75">75%</option>
+        <option value="1.0">100%</option>
+      </select>
+    </div>
+
+    <div class="form-group">
       <label for="task-input">Task Description</label>
       <textarea class="form-textarea" id="task-input" placeholder="Describe what you want the seller to deliver..." rows="3"></textarea>
     </div>
@@ -202,6 +212,7 @@
       <div class="escrow-detail" style="display:block; background:transparent; border:none; padding:0">
         <div class="escrow-detail-row"><span class="escrow-detail-label">Seller</span><span class="escrow-detail-value" id="review-seller"></span></div>
         <div class="escrow-detail-row"><span class="escrow-detail-label">Amount</span><span class="escrow-detail-value" id="review-amount"></span></div>
+        <div class="escrow-detail-row"><span class="escrow-detail-label">Collateral</span><span class="escrow-detail-value" id="review-collateral"></span></div>
         <div class="escrow-detail-row"><span class="escrow-detail-label">Task</span><span class="escrow-detail-value" id="review-task" style="word-break:break-word; max-width:400px"></span></div>
         <div class="escrow-detail-row"><span class="escrow-detail-label">Verification</span><span class="escrow-detail-value" id="review-verification"></span></div>
         <div class="escrow-detail-row"><span class="escrow-detail-label">Timeout</span><span class="escrow-detail-value" id="review-timeout"></span></div>
@@ -481,6 +492,8 @@ function populateReview() {
   document.getElementById('review-seller').textContent = truncateKey(selectedSeller?.publicKey)
   const amount = parseFloat(document.getElementById('amount-input').value)
   document.getElementById('review-amount').textContent = formatCents(Math.round(amount * 100))
+  const collateralRatio = parseFloat(document.getElementById('collateral-select').value)
+  document.getElementById('review-collateral').textContent = `${Math.round(collateralRatio * 100)}% (${formatCents(Math.round(amount * 100 * collateralRatio))})`
   document.getElementById('review-task').textContent = document.getElementById('task-input').value.trim()
   document.getElementById('review-verification').textContent = document.getElementById('verification-select').value
   document.getElementById('review-timeout').textContent = timeoutLabels[document.getElementById('timeout-select').value] || ''
@@ -493,9 +506,11 @@ document.getElementById('submit-btn').addEventListener('click', async function()
   this.textContent = 'Submitting...'
   try {
     const amount = Math.round(parseFloat(document.getElementById('amount-input').value) * 100)
+    const ratio = parseFloat(document.getElementById('collateral-select').value)
     const body = {
       seller: selectedSeller.publicKey,
       amountCents: amount,
+      sellerCollateral: Math.round(amount * ratio),
       taskSpec: { query: document.getElementById('task-input').value.trim() },
       verificationMethod: document.getElementById('verification-select').value,
       timeoutSeconds: parseInt(document.getElementById('timeout-select').value),

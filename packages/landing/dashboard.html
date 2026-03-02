@@ -84,11 +84,14 @@
   <div class="filter-pills">
     <button class="pill active" data-status="">All</button>
     <button class="pill" data-status="proposed">Proposed</button>
+    <button class="pill" data-status="accepted">Accepted</button>
     <button class="pill" data-status="active">Active</button>
     <button class="pill" data-status="delivered">Delivered</button>
     <button class="pill" data-status="released">Released</button>
     <button class="pill" data-status="failed">Failed</button>
     <button class="pill" data-status="disputed">Disputed</button>
+    <button class="pill" data-status="expired">Expired</button>
+    <button class="pill" data-status="burned">Burned</button>
   </div>
 
   <!-- Escrow List -->
@@ -347,12 +350,13 @@ function toggleDetail(esc, card) {
   const isBuyer = esc.buyerId === agentId
   const status = esc.status || 'unknown'
 
+  const eid = escHtml(esc.id)
   let rows = `
-    <div class="escrow-detail-row"><span class="escrow-detail-label">Escrow ID</span><span class="escrow-detail-value">${esc.id}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Escrow ID</span><span class="escrow-detail-value">${eid}</span></div>
     <div class="escrow-detail-row"><span class="escrow-detail-label">Amount</span><span class="escrow-detail-value">${formatCents(esc.amountCents)}</span></div>
-    <div class="escrow-detail-row"><span class="escrow-detail-label">Status</span><span class="escrow-detail-value">${status}</span></div>
-    <div class="escrow-detail-row"><span class="escrow-detail-label">Verification</span><span class="escrow-detail-value">${esc.verificationMethod || '-'}</span></div>
-    <div class="escrow-detail-row"><span class="escrow-detail-label">Dispute</span><span class="escrow-detail-value">${esc.disputeResolution || '-'}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Status</span><span class="escrow-detail-value">${escHtml(status)}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Verification</span><span class="escrow-detail-value">${escHtml(esc.verificationMethod || '-')}</span></div>
+    <div class="escrow-detail-row"><span class="escrow-detail-label">Dispute</span><span class="escrow-detail-value">${escHtml(esc.disputeResolution || '-')}</span></div>
     <div class="escrow-detail-row"><span class="escrow-detail-label">Created</span><span class="escrow-detail-value">${formatDate(esc.createdAt)}</span></div>
   `
 
@@ -365,28 +369,28 @@ function toggleDetail(esc, card) {
 
   // Seller + proposed → Accept
   if (!isBuyer && status === 'proposed') {
-    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('accept','${esc.id}',this)">Accept</button>`
+    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('accept','${eid}',this)">Accept</button>`
   }
   // Seller + active → Deliver
   if (!isBuyer && status === 'active') {
-    actions += `<button class="btn-outline-page btn-sm-page" onclick="window._showDeliverForm('${esc.id}')">Deliver</button>`
+    actions += `<button class="btn-outline-page btn-sm-page" onclick="window._showDeliverForm('${eid}')">Deliver</button>`
   }
   // Buyer + delivered + buyer_confirm → Confirm
   if (isBuyer && status === 'delivered' && esc.verificationMethod === 'buyer_confirm') {
-    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('confirm','${esc.id}',this)">Confirm Delivery</button>`
+    actions += `<button class="btn-page btn-sm-page" onclick="window._escrowAction('confirm','${eid}',this)">Confirm Delivery</button>`
   }
   // Active or delivered → Dispute
   if ((status === 'active' || status === 'delivered')) {
-    actions += `<button class="btn-danger btn-sm-page" onclick="window._escrowAction('dispute','${esc.id}',this)">Dispute</button>`
+    actions += `<button class="btn-danger btn-sm-page" onclick="window._escrowAction('dispute','${eid}',this)">Dispute</button>`
   }
 
   detail.innerHTML = rows +
     (actions ? `<div class="escrow-actions">${actions}</div>` : '') +
-    `<div id="deliver-form-${esc.id}" style="display:none; margin-top:0.75rem">
-      <textarea class="form-textarea" id="deliver-input-${esc.id}" placeholder='{"results": [...]}' rows="4"></textarea>
-      <button class="btn-page btn-sm-page" style="margin-top:0.5rem" onclick="window._submitDelivery('${esc.id}')">Submit Delivery</button>
+    `<div id="deliver-form-${eid}" style="display:none; margin-top:0.75rem">
+      <textarea class="form-textarea" id="deliver-input-${eid}" placeholder='{"results": [...]}' rows="4"></textarea>
+      <button class="btn-page btn-sm-page" style="margin-top:0.5rem" onclick="window._submitDelivery('${eid}')">Submit Delivery</button>
     </div>` +
-    `<div class="msg" id="action-msg-${esc.id}"></div>`
+    `<div class="msg" id="action-msg-${eid}"></div>`
 
   detail.style.display = ''
 }

@@ -488,63 +488,34 @@
 </footer>
 
 <script type="module">
-import { getPublicKey, signAsync } from 'https://esm.sh/@noble/secp256k1@3'
-import { sha256 } from 'https://esm.sh/@noble/hashes@2/sha2'
-import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
-import { initMobileNav } from './ttv-lib.js'
+import {
+  initMobileNav, generateKeypair, ecdsaHeaders, saveSession, getSession,
+  exportKeyBundle, setEnv, getApiUrl, PK_LIVE,
+} from './ttv-lib.js'
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
 initMobileNav()
 
-const PK_LIVE = 'pk_live_51ST8scJc7Iv6B67gXRZRTnkbmzEgMDdixvmUd8RkKhW8HIkccWIv9wrTdhnOGqqQnqLJl338Y4KlbiMmgtKLcnqY00WjcuChBX'
-const URLS = {
-  sandbox: 'https://sandbox.trustthenverify.com/v2',
-  production: 'https://api.trustthenverify.com/v2',
-}
-
 let env = 'sandbox'
-let apiUrl = URLS.sandbox
 let keypair = null  // { publicKey, privateKey }
 let selectedRole = null
 let stripe, elements, cardElement
 
-// ── Crypto helpers ──────────────────────────────────────────────────────────
-
-function generateKeypair() {
-  const priv = new Uint8Array(32)
-  crypto.getRandomValues(priv)
-  const pub = getPublicKey(priv, true)
-  return { privateKey: bytesToHex(priv), publicKey: bytesToHex(pub) }
-}
-
-async function ecdsaHeaders(method, path, bodyStr) {
-  const ts = Math.floor(Date.now() / 1000)
-  const encoder = new TextEncoder()
-  const bodyHash = bytesToHex(sha256(encoder.encode(bodyStr || '')))
-  const canonical = `${ts}\n${method}\n${path}\n${bodyHash}`
-  const msgHash = sha256(encoder.encode(canonical))
-  const sig = await signAsync(msgHash, hexToBytes(keypair.privateKey), { prehash: false })
-  return {
-    'Content-Type': 'application/json',
-    'X-Agent-Pubkey': keypair.publicKey,
-    'X-Agent-Timestamp': String(ts),
-    'X-Agent-Signature': bytesToHex(sig),
-  }
-}
+// ── API helpers (use keypair from module state) ─────────────────────────────
 
 async function apiPost(path, body) {
   const bodyStr = JSON.stringify(body)
-  const headers = await ecdsaHeaders('POST', path, bodyStr)
-  const res = await fetch(apiUrl + path, { method: 'POST', headers, body: bodyStr })
+  const headers = await ecdsaHeaders('POST', path, bodyStr, keypair)
+  const res = await fetch(getApiUrl() + path, { method: 'POST', headers, body: bodyStr })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
   return json.data
 }
 
 async function apiGet(path) {
-  const headers = await ecdsaHeaders('GET', path, '')
-  const res = await fetch(apiUrl + path, { headers })
+  const headers = await ecdsaHeaders('GET', path, '', keypair)
+  const res = await fetch(getApiUrl() + path, { headers })
   const json = await res.json()
   if (!res.ok) throw new Error(json.error?.message || `HTTP ${res.status}`)
   return json.data
@@ -574,7 +545,7 @@ function completePhase(id) {
 
 document.getElementById('env-select').addEventListener('change', function () {
   env = this.value
-  apiUrl = URLS[env]
+  setEnv(env)
   document.getElementById('env-hint').textContent =
     env === 'sandbox' ? 'No real charges. Free to experiment.' : 'Live mode. Real money.'
 })
@@ -583,10 +554,7 @@ document.getElementById('env-select').addEventListener('change', function () {
 
 function persistSession() {
   const persist = document.getElementById('remember-device').checked
-  const store = persist ? localStorage : sessionStorage
-  store.setItem('ttv_pubkey', keypair.publicKey)
-  store.setItem('ttv_privkey', keypair.privateKey)
-  store.setItem('ttv_env', env)
+  saveSession(keypair.publicKey, keypair.privateKey, env, persist)
 }
 
 async function registerAgent() {
@@ -723,44 +691,13 @@ document.getElementById('import-btn').addEventListener('click', async function (
   }
 })
 
-function _b64ToBuf(b64) {
-  const bin = atob(b64)
-  const buf = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
-  return buf
-}
-
-// Backup button
+// Backup button — uses exportKeyBundle from ttv-lib.js
 document.getElementById('backup-btn').addEventListener('click', async function () {
   const password = document.getElementById('backup-password').value
   if (!password || password.length < 6) return msg('phase-a-msg', 'Backup password must be at least 6 characters', 'err')
 
   try {
-    const enc = new TextEncoder()
-    const salt = crypto.getRandomValues(new Uint8Array(16))
-    const iv = crypto.getRandomValues(new Uint8Array(12))
-    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'])
-    const aesKey = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt']
-    )
-    const plaintext = enc.encode(JSON.stringify({ publicKey: keypair.publicKey, privateKey: keypair.privateKey }))
-    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, plaintext)
-
-    const bundle = {
-      version: 1,
-      encrypted: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
-      iv: btoa(String.fromCharCode(...iv)),
-      salt: btoa(String.fromCharCode(...salt)),
-    }
-
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'ttv-keys.json'
-    a.click()
-    URL.revokeObjectURL(url)
+    await exportKeyBundle(password)
     msg('phase-a-msg', 'Key backup downloaded', 'ok')
   } catch (e) {
     msg('phase-a-msg', 'Backup failed: ' + e.message, 'err')
@@ -771,15 +708,15 @@ document.getElementById('skip-backup-btn').addEventListener('click', function ()
   document.getElementById('backup-prompt').style.display = 'none'
 })
 
-// Restore from session (check localStorage first, then sessionStorage)
-const savedPub = localStorage.getItem('ttv_pubkey') || sessionStorage.getItem('ttv_pubkey')
-const savedPriv = localStorage.getItem('ttv_privkey') || sessionStorage.getItem('ttv_privkey')
-if (savedPub && savedPriv) {
-  keypair = { publicKey: savedPub, privateKey: savedPriv }
+// Restore from session using canonical getSession()
+const savedSession = getSession()
+if (savedSession) {
+  keypair = { publicKey: savedSession.publicKey, privateKey: savedSession.privateKey }
+  if (savedSession.env) { env = savedSession.env; setEnv(env) }
   document.getElementById('keys-display').style.display = ''
-  document.getElementById('pubkey-value').textContent = savedPub
+  document.getElementById('pubkey-value').textContent = savedSession.publicKey
   document.getElementById('privkey-value').textContent = '\u2022'.repeat(32)
-  document.getElementById('privkey-value').dataset.real = savedPriv
+  document.getElementById('privkey-value').dataset.real = savedSession.privateKey
   document.getElementById('generate-btn').textContent = 'Generated'
   document.getElementById('generate-btn').disabled = true
   if (localStorage.getItem('ttv_pubkey')) {

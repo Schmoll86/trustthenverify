@@ -161,9 +161,8 @@
 </footer>
 
 <script type="module">
-import { getPublicKey } from 'https://esm.sh/@noble/secp256k1@3'
-import { bytesToHex, hexToBytes } from 'https://esm.sh/@noble/hashes@2/utils'
-import { initMobileNav } from './ttv-lib.js'
+import { getPublicKey, hexToBytes, bytesToHex } from './ttv-lib.js'
+import { initMobileNav, saveSession, importKeyBundle } from './ttv-lib.js'
 
 function showMsg(id, text, type) {
   const el = document.getElementById(id)
@@ -172,15 +171,13 @@ function showMsg(id, text, type) {
 }
 
 function restoreSession(publicKey, privateKey, env) {
-  localStorage.setItem('ttv_pubkey', publicKey)
-  localStorage.setItem('ttv_privkey', privateKey)
-  localStorage.setItem('ttv_env', env || 'sandbox')
+  saveSession(publicKey, privateKey, env || 'sandbox', true)
   showMsg('import-msg', 'Session restored. Redirecting...', 'ok')
   showMsg('paste-msg', 'Session restored. Redirecting...', 'ok')
   setTimeout(() => { window.location.href = '/dashboard' }, 1000)
 }
 
-// Import from file
+// Import from file — uses importKeyBundle from ttv-lib.js
 document.getElementById('import-btn').addEventListener('click', async function () {
   const fileInput = document.getElementById('import-file')
   const password = document.getElementById('import-password').value
@@ -188,24 +185,9 @@ document.getElementById('import-btn').addEventListener('click', async function (
   if (!password) return showMsg('import-msg', 'Enter the backup password', 'err')
 
   try {
-    const text = await fileInput.files[0].text()
-    const bundle = JSON.parse(text)
-    if (bundle.version !== 1) throw new Error('Unsupported key file version')
-
-    const enc = new TextEncoder()
-    const salt = b64ToBuf(bundle.salt)
-    const iv = b64ToBuf(bundle.iv)
-    const ciphertext = b64ToBuf(bundle.encrypted)
-
-    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey'])
-    const aesKey = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
-      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
-    )
-    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext)
-    const keys = JSON.parse(new TextDecoder().decode(plaintext))
-
-    restoreSession(keys.publicKey, keys.privateKey, 'sandbox')
+    const keys = await importKeyBundle(fileInput.files[0], password)
+    const env = document.getElementById('recover-env').value
+    restoreSession(keys.publicKey, keys.privateKey, env)
   } catch (e) {
     showMsg('import-msg', 'Import failed: wrong password or corrupt file', 'err')
   }
@@ -229,12 +211,6 @@ document.getElementById('paste-btn').addEventListener('click', function () {
   }
 })
 
-function b64ToBuf(b64) {
-  const bin = atob(b64)
-  const buf = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
-  return buf
-}
 
 initMobileNav()
 

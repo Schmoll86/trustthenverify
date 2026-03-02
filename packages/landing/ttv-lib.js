@@ -169,7 +169,7 @@ export function generateKeypair() {
   return { privateKey: bytesToHex(priv), publicKey: bytesToHex(pub) }
 }
 
-async function ecdsaHeaders(method, path, bodyStr, session) {
+export async function ecdsaHeaders(method, path, bodyStr, session) {
   const ts = Math.floor(Date.now() / 1000)
   const encoder = new TextEncoder()
   const bodyHash = bytesToHex(sha256(encoder.encode(bodyStr || '')))

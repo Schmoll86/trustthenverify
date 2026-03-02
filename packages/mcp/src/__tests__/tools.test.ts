@@ -21,15 +21,18 @@ function mockProtocol(): TrustProtocol {
     'getOracleAssignments', 'submitOracleVote', 'getOracleEarnings', 'getOracleTask',
     'setupStripeCustomer', 'createSetupIntent', 'attachPaymentMethod',
     'setupStripeConnect', 'getStripeStatus',
+    'x402Pay', 'checkUsdcBalance', 'getEthAddress', 'registerWebhook',
   ] as const
   for (const m of methods) {
     proto[m] = vi.fn().mockResolvedValue({ mock: m })
   }
+  // getEthAddress is synchronous
+  proto.getEthAddress = vi.fn().mockReturnValue('0x1234567890abcdef1234567890abcdef12345678')
   return proto as TrustProtocol
 }
 
 // ---------------------------------------------------------------------------
-// Expected tool names (41 total)
+// Expected tool names (45 total)
 // ---------------------------------------------------------------------------
 const EXPECTED_TOOLS = [
   'trust_search_agents',
@@ -73,6 +76,10 @@ const EXPECTED_TOOLS = [
   'trust_update_agent',
   'trust_list_policies',
   'trust_agent_stats',
+  'trust_x402_pay',
+  'trust_x402_balance',
+  'trust_x402_address',
+  'trust_register_webhook',
 ]
 
 // ---------------------------------------------------------------------------
@@ -100,9 +107,9 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP tool registration', () => {
-  it('registers exactly 41 tools', async () => {
+  it('registers exactly 45 tools', async () => {
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(41)
+    expect(tools).toHaveLength(45)
   })
 
   it('registers all expected tool names', async () => {

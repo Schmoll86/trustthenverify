@@ -69,6 +69,10 @@ function seedAgent(keypair: { publicKey: string }, overrides: Record<string, unk
     stripe_connected_account_id: null,
     stripe_onboarding_complete: false,
     stripe_default_payment_method: null,
+    email: null,
+    notification_preferences: null,
+    webhook_url: null,
+    webhook_secret: null,
     ...overrides,
   }
   mockDb.seedTable('agents', [agent])

@@ -125,6 +125,13 @@ export function createMockDb() {
               return false
             }
           }
+          const ilikeMatch = part.match(/^(\w+)\.ilike\.(.+)$/)
+          if (ilikeMatch) {
+            const [, field, pattern] = ilikeMatch
+            const regexStr = '^' + pattern.replace(/%/g, '.*') + '$'
+            const regex = new RegExp(regexStr, 'i')
+            return (r: Row) => regex.test(String(r[field] ?? ''))
+          }
           const eqMatch = part.match(/^(\w+)\.eq\.(.+)$/)
           if (eqMatch) {
             const [, field, value] = eqMatch

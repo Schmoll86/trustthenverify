@@ -23,6 +23,7 @@ import { ObservationStore } from './observations.js'
 export { ObservationStore } from './observations.js'
 export type { Observation } from './observations.js'
 
+import { publicKeyToAddress } from './channels.js'
 export { signChannelPayment, verifyChannelPayment, publicKeyToAddress, encodeChannelClose } from './channels.js'
 export type { ChannelPayment } from './channels.js'
 
@@ -48,6 +49,8 @@ export interface Agent {
   stripeDefaultPaymentMethod: string | null
   email: string | null
   notificationPreferences: Record<string, boolean> | null
+  webhookUrl: string | null
+  webhookSecret: string | null
 }
 
 export interface Policy {
@@ -108,7 +111,18 @@ export type VerificationMethod =
   | 'buyer_confirm'
   | 'zkml_proof'
 
-export type FundingMode = 'stripe' | 'onchain'
+export type FundingMode = 'stripe' | 'onchain' | 'x402'
+
+export interface X402PaymentInstructions {
+  gatewayAddress: string
+  amountUsdc: string        // "5.50"
+  amountUsdcRaw: string     // "5500000" (6 decimals)
+  chainId: number           // 8453
+  usdcContract: string
+  escrowId: string
+  nonce: string
+  expiresAt: string
+}
 
 export interface Escrow {
   id: string
@@ -145,6 +159,11 @@ export interface Escrow {
   stripeTransferId: string | null
   buyerPaymentMethodId: string | null
   sellerPaymentMethodId: string | null
+  // x402 payment fields
+  x402TxHash: string | null
+  x402Macaroon: string | null
+  x402SettlementFeeCents: number
+  x402SellerPayoutTx: string | null
 }
 
 export interface PaymentChannel {
@@ -719,7 +738,7 @@ export class TrustProtocol {
     buyerAddress?: string
     sellerAddress?: string
     buyerPaymentMethodId?: string
-  }): Promise<Escrow> {
+  }): Promise<Escrow & { x402PaymentInstructions?: X402PaymentInstructions }> {
     return this.post('/escrow/propose', {
       seller: params.seller,
       amountCents: params.amountCents,
@@ -882,6 +901,32 @@ export class TrustProtocol {
 
   async closeChannel(channelAddress: string): Promise<PaymentChannel> {
     return this.post(`/channels/${channelAddress}/close`, {})
+  }
+
+  // ── x402 Payment (§10.5) ──────────────────────────────────────────────────
+
+  /** Pay for an x402 escrow with a USDC transaction hash. Returns escrow with macaroon. */
+  async x402Pay(escrowId: string, txHash: string): Promise<Escrow & { x402Macaroon: string }> {
+    return this.post(`/escrow/${escrowId}/x402-pay`, { txHash })
+  }
+
+  /** Get your Ethereum address (derived from agent key). */
+  getEthAddress(): string {
+    return publicKeyToAddress(this.publicKey)
+  }
+
+  /** Check USDC balance on Base. No auth required. */
+  async checkUsdcBalance(address?: string): Promise<{ address: string; balance: string; balanceRaw: string }> {
+    const addr = address ?? this.getEthAddress()
+    const res = await fetch(`${this.baseUrl}/x402/balance/${addr}`)
+    const json = await res.json() as { data: { address: string; balance: string; balanceRaw: string }; error?: { message: string } }
+    if (!res.ok) throw new Error(json.error?.message ?? `Request failed: ${res.status}`)
+    return json.data
+  }
+
+  /** Register webhook URL for instant notifications. */
+  async registerWebhook(url: string): Promise<{ webhookUrl: string; webhookSecret: string }> {
+    return this.post(`/agents/${this.publicKey}/webhook`, { url })
   }
 
   // ── Observations (local — §7) ────────────────────────────────────────────

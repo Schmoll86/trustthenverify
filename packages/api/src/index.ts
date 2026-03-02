@@ -15,6 +15,7 @@ import { channels } from './routes/channels'
 import { marketplace } from './routes/marketplace'
 import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement, handleOraclePayouts } from './cron/escrow-timeout'
 import { webhooks } from './routes/webhooks'
+import { x402 } from './routes/x402'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
 import { handleOracleDispatch, type OracleQueueMessage } from './queue/oracle-consumer'
 import { handleNotification, type NotificationQueueMessage } from './queue/notification-consumer'
@@ -94,6 +95,9 @@ app.get('/v2/health', async (c) => {
 
 // ── Webhooks (before auth — authenticates via Stripe signature) ──────────
 app.route('/webhooks', webhooks)
+
+// ── x402 public routes (before auth — balance checks, macaroon verify) ───
+app.route('/v2/x402', x402)
 
 // ── Auth middleware (applies to all /v2 routes) ──────────────────────────────
 app.use('/v2/*', authMiddleware)

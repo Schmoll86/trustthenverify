@@ -17,6 +17,8 @@ export interface AgentRow {
   stripe_default_payment_method: string | null
   email: string | null
   notification_preferences: Record<string, boolean> | null
+  webhook_url: string | null
+  webhook_secret: string | null
 }
 
 export interface PolicyRow {
@@ -61,6 +63,7 @@ export interface EscrowRow {
   dispute_resolution: string
   status: string
   proof: string | null
+  deliverable: Record<string, unknown> | null
   created_at: string
   funded_at: string | null
   completed_at: string | null
@@ -68,7 +71,7 @@ export interface EscrowRow {
   delivery_attempts: number
   timeout_seconds: number
   // Phase 4: on-chain escrow fields
-  funding_mode: 'stripe' | 'onchain'
+  funding_mode: 'stripe' | 'onchain' | 'x402'
   buyer_address: string | null
   seller_address: string | null
   buyer_funded: boolean
@@ -83,6 +86,11 @@ export interface EscrowRow {
   seller_payment_method_id: string | null
   // Phase 6: Oracle fee surcharge
   oracle_fee_cents: number
+  // x402 payment fields
+  x402_tx_hash: string | null
+  x402_macaroon: string | null
+  x402_settlement_fee_cents: number
+  x402_seller_payout_tx: string | null
 }
 
 export interface PaymentChannelRow {
@@ -157,6 +165,18 @@ export interface AttestationRow {
 }
 
 // Phase 6: Oracle Verification
+
+export interface X402ReceiptRow {
+  id: string
+  escrow_id: string
+  tx_hash: string
+  from_address: string
+  to_address: string
+  amount_usdc: number
+  block_number: number
+  verified_at: string
+  macaroon: string
+}
 
 export interface OraclePoolRow {
   id: string

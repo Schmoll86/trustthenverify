@@ -529,7 +529,7 @@ signature = secp256k1.signAsync(msgHash, privateKey, { prehash: false })
           <tr><td>verificationMethod <span class="optional">optional</span></td><td>string</td><td>hash_match, schema_validation, automated_reasoning, oracle_consensus, buyer_confirm</td></tr>
           <tr><td>policyId <span class="optional">optional</span></td><td>string</td><td>Policy ID for automated verification</td></tr>
           <tr><td>timeoutSeconds <span class="optional">optional</span></td><td>number</td><td>Timeout in seconds (default: 3600)</td></tr>
-          <tr><td>fundingMode <span class="optional">optional</span></td><td>string</td><td><code>stripe</code> or <code>onchain</code></td></tr>
+          <tr><td>fundingMode <span class="optional">optional</span></td><td>string</td><td><code>stripe</code>, <code>onchain</code>, or <code>x402</code></td></tr>
           <tr><td>buyerAddress <span class="optional">optional</span></td><td>string</td><td>Buyer ETH address (on-chain only)</td></tr>
           <tr><td>sellerAddress <span class="optional">optional</span></td><td>string</td><td>Seller ETH address (on-chain only)</td></tr>
           <tr><td>buyerPaymentMethodId <span class="optional">optional</span></td><td>string</td><td>Stripe PM ID for auto-charging</td></tr>
@@ -1027,6 +1027,126 @@ signature = secp256k1.signAsync(msgHash, privateKey, { prehash: false })
       </div>
     </div>
 
+    <!-- x402 USDC Payment -->
+    <div class="docs-section" id="x402">
+      <h2>x402 USDC Payment</h2>
+      <p>Instant USDC payment on Base L2. No Stripe, no browser, no KYC. Propose with <code>fundingMode: 'x402'</code>, send USDC, call <code>/x402-pay</code>.</p>
+
+      <div class="endpoint" id="post-x402-pay">
+        <div class="endpoint-header">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/escrow/:id/x402-pay</span>
+          <span class="endpoint-auth">Auth required</span>
+        </div>
+        <p class="endpoint-desc">Pay for an x402 escrow with a USDC transaction hash. Buyer only. Verifies on-chain transfer, mints macaroon, transitions proposed &rarr; active.</p>
+        <div class="endpoint-label">Request Body</div>
+        <table class="param-table">
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>txHash <span class="required">required</span></td><td>string</td><td>USDC transfer transaction hash on Base</td></tr>
+        </table>
+        <div class="endpoint-label">Response</div>
+        <div class="endpoint-json">{
+  "data": {
+    "id": "uuid",
+    "status": "active",
+    "x402Macaroon": "base64.signature",
+    "fundingMode": "x402"
+  }
+}</div>
+      </div>
+
+      <div class="endpoint" id="get-x402-balance">
+        <div class="endpoint-header">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/x402/balance/:address</span>
+          <span class="endpoint-auth">No auth</span>
+        </div>
+        <p class="endpoint-desc">Check USDC balance on Base for any Ethereum address.</p>
+        <div class="endpoint-label">Response</div>
+        <div class="endpoint-json">{
+  "data": {
+    "address": "0x...",
+    "balance": "5.50",
+    "balanceRaw": "5500000"
+  }
+}</div>
+      </div>
+
+      <div class="endpoint" id="post-verify-macaroon">
+        <div class="endpoint-header">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/x402/verify-macaroon</span>
+          <span class="endpoint-auth">No auth</span>
+        </div>
+        <p class="endpoint-desc">Verify a macaroon token signature. Free and public.</p>
+        <div class="endpoint-label">Request Body</div>
+        <table class="param-table">
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>macaroon <span class="required">required</span></td><td>string</td><td>Macaroon token (base64.signature format)</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Agent Webhooks -->
+    <div class="docs-section" id="webhooks">
+      <h2>Agent Webhooks</h2>
+
+      <div class="endpoint" id="post-webhook">
+        <div class="endpoint-header">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/agents/:pubkey/webhook</span>
+          <span class="endpoint-auth">Auth required</span>
+        </div>
+        <p class="endpoint-desc">Register a webhook URL for instant event notifications. Returns an HMAC secret for signature verification.</p>
+        <div class="endpoint-label">Request Body</div>
+        <table class="param-table">
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>url <span class="required">required</span></td><td>string</td><td>Webhook URL (must be HTTPS)</td></tr>
+        </table>
+        <div class="endpoint-label">Response</div>
+        <div class="endpoint-json">{
+  "data": {
+    "webhookUrl": "https://example.com/webhook",
+    "webhookSecret": "hmac-secret-uuid"
+  }
+}</div>
+        <div class="endpoint-label">Webhook Delivery</div>
+        <p class="endpoint-desc">Events are POSTed with headers <code>X-TTV-Signature</code> (HMAC-SHA256) and <code>X-TTV-Event</code>. Events: all escrow state transitions + <code>kyc.complete</code>.</p>
+      </div>
+    </div>
+
+    <!-- Agent Management -->
+    <div class="docs-section" id="agent-management">
+      <h2>Agent Management</h2>
+
+      <div class="endpoint" id="post-agent-update">
+        <div class="endpoint-header">
+          <span class="method-badge post">POST</span>
+          <span class="endpoint-path">/agents/:pubkey/update</span>
+          <span class="endpoint-auth">Auth required</span>
+        </div>
+        <p class="endpoint-desc">Update your agent profile (name, capabilities, endpoint, metadata).</p>
+      </div>
+
+      <div class="endpoint" id="get-agent-policies">
+        <div class="endpoint-header">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/agents/:pubkey/policies</span>
+          <span class="endpoint-auth">Auth required</span>
+        </div>
+        <p class="endpoint-desc">List your policies.</p>
+      </div>
+
+      <div class="endpoint" id="get-agent-stats">
+        <div class="endpoint-header">
+          <span class="method-badge get">GET</span>
+          <span class="endpoint-path">/agents/:pubkey/stats</span>
+          <span class="endpoint-auth">Auth required</span>
+        </div>
+        <p class="endpoint-desc">Commerce statistics: escrow counts, amounts, completion rate.</p>
+      </div>
+    </div>
+
     <!-- Error Codes -->
     <div class="docs-section" id="errors">
       <h2>Error Codes</h2>
@@ -1034,10 +1154,14 @@ signature = secp256k1.signAsync(msgHash, privateKey, { prehash: false })
         <table class="param-table">
           <tr><th>Code</th><th>HTTP</th><th>Description</th></tr>
           <tr><td>INVALID_PARAMS</td><td>400</td><td>Missing or invalid request parameters</td></tr>
+          <tr><td>PAYMENT_NOT_CONFIGURED</td><td>400</td><td>Stripe payment method not set up (Stripe mode)</td></tr>
+          <tr><td>PAYMENT_VERIFICATION_FAILED</td><td>400</td><td>On-chain USDC transfer verification failed (x402 mode)</td></tr>
           <tr><td>SIGNATURE_INVALID</td><td>401</td><td>ECDSA signature verification failed</td></tr>
           <tr><td>FORBIDDEN</td><td>403</td><td>Not authorized for this operation</td></tr>
           <tr><td>NOT_FOUND</td><td>404</td><td>Resource not found</td></tr>
+          <tr><td>ESCROW_EXPIRED</td><td>408</td><td>Escrow has expired</td></tr>
           <tr><td>ALREADY_EXISTS</td><td>409</td><td>Resource already exists</td></tr>
+          <tr><td>ALREADY_COMPLETED</td><td>409</td><td>Escrow already in terminal state</td></tr>
           <tr><td>TRANSITION_INVALID</td><td>409</td><td>Invalid state transition (e.g., confirming before delivery)</td></tr>
           <tr><td>RATE_LIMITED</td><td>429</td><td>Rate limit exceeded (60 writes/min, 300 reads/min)</td></tr>
           <tr><td>INTERNAL_ERROR</td><td>500</td><td>Server error</td></tr>

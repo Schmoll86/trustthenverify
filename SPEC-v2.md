@@ -1213,9 +1213,33 @@ POST   /channels                       — register a payment channel
 GET    /channels/:address              — get channel details (parties only)
 POST   /channels/:address/close        — record channel closure
 
+# x402 USDC Payment (custodial, instant)
+POST   /escrow/:id/x402-pay            — pay for x402 escrow with USDC tx hash (buyer only)
+GET    /x402/balance/:address           — check USDC balance on Base (public, no auth)
+POST   /x402/verify-macaroon            — verify macaroon token signature (public, no auth)
+
+# Agent Management
+POST   /agents/:pubkey/update           — update agent profile (name, capabilities, endpoint, metadata)
+GET    /agents/:pubkey/policies          — list agent's policies
+GET    /agents/:pubkey/stats             — commerce statistics (escrow counts, amounts, completion rate)
+POST   /agents/:pubkey/notifications     — update email and notification preferences
+POST   /agents/:pubkey/webhook           — register webhook URL for instant event notifications
+
 # Webhooks
 POST   /webhooks/stripe                — Stripe webhook (payment_intent.payment_failed, account.updated)
 ```
+
+**x402 payment mode (`fundingMode: 'x402'`):**
+- Buyer proposes escrow with `fundingMode: 'x402'`. API auto-derives buyer/seller Ethereum addresses from secp256k1 public keys and returns `x402PaymentInstructions` (gateway address, USDC amount, chain ID, nonce, expiry).
+- Buyer sends USDC on Base L2 to the gateway EOA, then calls `POST /escrow/:id/x402-pay { txHash }`.
+- API verifies the on-chain transfer by parsing USDC `Transfer` event logs in the transaction receipt. On success, mints a signed macaroon token and transitions `proposed → active` atomically.
+- On release (`confirmDelivery` or `automated_reasoning` pass), API settles USDC to the seller's address (minus 1% settlement fee, configurable via `X402_SETTLEMENT_FEE_BPS`).
+- Macaroon format: `base64(payload).base64(signature)` where payload is `{ escrowId, buyerAddress, sellerAddress, amountCents, issuedAt, expiresAt, nonce }` signed with the gateway key. Verification is public and free (`POST /x402/verify-macaroon`).
+
+**Agent webhook registration (`POST /agents/:pubkey/webhook`):**
+- Body: `{ url: "https://..." }`. Generates an HMAC secret, stores on agent row, returns `{ webhookUrl, webhookSecret }`.
+- The notification consumer (queue) delivers events to registered webhooks via POST with `X-TTV-Signature` (HMAC-SHA256) and `X-TTV-Event` headers.
+- Events: all escrow state transitions + `kyc.complete`. Webhook delivery is best-effort (non-blocking, no retries).
 
 **Spawn mechanics (`POST /agents/:pubkey/spawn`):**
 - Only the agent identified by `:pubkey` can call this (enforced by signature auth). You spawn children of yourself, not of others.
@@ -1229,7 +1253,7 @@ POST   /webhooks/stripe                — Stripe webhook (payment_intent.paymen
 - `match`: `any` (default) returns agents with at least one matching capability. `all` returns agents with every listed capability.
 - Results paginated via `?cursor=` token from `meta.cursor` in the response.
 
-~25 endpoints total. The Policies section has 8 endpoints to support coverage maps, activation, and iterative refinement.
+~45 endpoints total. The Policies section has 8 endpoints, Oracles has 6, Stripe has 5, x402 has 3, Agent management has 5.
 
 **Policy creation is iterative but stateless.** The API is one-shot per call — no server-side sessions. The iteration loop (create → read coverage → revise NL → re-create) happens client-side in the SDK. `POST /policies/:id/revise` creates a new policy row (new UUID) from updated NL intent, linked to the original via `parent_version`. The server re-runs the translation pipeline and returns the new draft. The SDK's `revisePolicy()` helper drives this loop. No server-side conversation state, no WebSocket, no long-lived connections.
 
@@ -1672,7 +1696,7 @@ Each phase is independently deployable and produces a usable system.
 
 **Deliverable:** High-value disputes have a resolution path.
 
-**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–9 complete** (except Phase 8 zkML, pending external technology maturation). 520 unit tests (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 production API + 19 on-chain Base Mainnet + 33 Claude agent-driven scenarios). 41 MCP tools. Stripe webhooks live. Oracle payout cron via Stripe Connect. Claude agent E2E: 8 autonomous scenarios (happy path, on-chain contract deployment, dispute/arbitration, oracle consensus, policy lifecycle, marketplace, payment channels, Stripe onboarding) — all driven by real Claude models (Sonnet 4.6, Haiku 4.5, Sonnet 4.5) making real API calls. Interactive quickstart, API docs, onboarding UI live at trustthenverify.com. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Repo public at github.com/Schmoll86/TrustThenVerify. npm packages `@trustthenverify/sdk@0.2.0` and `@trustthenverify/mcp@0.2.0` published.
+**Estimated build time: Phases 0–5 in 12–17 weeks.** (Phase 2 expanded by ~1 week for translation pipeline and coverage map.) **Phases 0–9 complete** (except Phase 8 zkML, pending external technology maturation). 637 unit tests (545 API + 79 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 production API + 19 on-chain Base Mainnet + 33 Claude agent-driven scenarios). 45 MCP tools. Three payment rails: Stripe Connect (off-chain), Base L2 contracts (on-chain), x402 USDC (custodial instant). Agent webhook notifications (HMAC-SHA256 signed). Stripe webhooks live. Oracle payout cron via Stripe Connect. Claude agent E2E: 8 autonomous scenarios (happy path, on-chain contract deployment, dispute/arbitration, oracle consensus, policy lifecycle, marketplace, payment channels, Stripe onboarding) — all driven by real Claude models (Sonnet 4.6, Haiku 4.5, Sonnet 4.5) making real API calls. Interactive quickstart, API docs, onboarding UI live at trustthenverify.com. SEO + discoverability (robots.txt, sitemap, llms.txt, OG tags, JSON-LD). Repo public at github.com/Schmoll86/TrustThenVerify. npm packages `@trustthenverify/sdk@0.2.0` and `@trustthenverify/mcp@0.2.0` published.
 
 ---
 
@@ -1729,3 +1753,19 @@ v1 and v2 are not mutually exclusive.
 5. **v1 infrastructure (KV cache, R2 archive, score engine) deprecated** when escrow + AR provides equivalent or better signal.
 
 No flag day. Let the market decide.
+
+## 14. Implementation Compliance Log
+
+Audit and fixes performed 2026-03-01. Documents spec deviations found and their resolution.
+
+| Spec Section | Issue | Resolution |
+|---|---|---|
+| SS2.2 | `seller_deposit` defaulted to 0, not 50% | Fixed: `escrow.ts` defaults to `Math.round(amountCents * 0.5)` |
+| SS3.4 | Arbitrator received `null` for deliverable (only proof hash stored) | Fixed: migration `012_escrow_deliverable.sql` adds `deliverable JSONB`. Deliver handler stores full JSON. |
+| SS9.4 | Expired escrow returned `409 EXPIRED` | Fixed: returns `408 ESCROW_EXPIRED` |
+| SS9.4 | Invalid state for delivery returned `409 INVALID_STATE` | Fixed: returns `409 ALREADY_COMPLETED` |
+| UI | Transact page had no collateral field | Fixed: dropdown with 25%/50%/75%/100% options |
+| UI | Dashboard XSS — `esc.id`, `status` unescaped in innerHTML | Fixed: all values wrapped in `escHtml()` |
+| UI | Dashboard missing filter pills for accepted/expired/burned | Fixed: all escrow states have filter pills |
+| UI | recover.html hardcoded env to `'sandbox'` for file import | Fixed: reads env selector |
+| UI | Landing pages duplicated crypto functions from ttv-lib.js | Fixed: consolidated to import from ttv-lib.js |

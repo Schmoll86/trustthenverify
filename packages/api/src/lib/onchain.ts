@@ -14,6 +14,7 @@ import {
   decodeAddress,
   evmStateToStatus,
 } from './abi'
+import { sendSignedTransaction } from './eth-utils'
 
 export interface OnchainService {
   /** Deploy an EscrowInstance via factory CREATE2. Returns contract address + tx hash. */
@@ -208,104 +209,16 @@ export class RealOnchainService implements OnchainService {
     return evmStateToStatus(decodeUint256(result))
   }
 
-  /** Derive the sender address from the private key. */
-  private async getSenderAddress(): Promise<string> {
-    const { getPublicKey, Point } = await import('@noble/secp256k1')
-    const { keccak_256 } = await import('@noble/hashes/sha3.js')
-    const { hexToBytes, bytesToHex } = await import('@noble/hashes/utils.js')
-
-    const compressed = getPublicKey(hexToBytes(this.privateKey))
-    const point = Point.fromHex(bytesToHex(compressed))
-    const uncompressed = point.toBytes(false)
-    const hash = keccak_256(uncompressed.slice(1))
-    return '0x' + bytesToHex(hash.slice(12))
-  }
-
   /** Build, sign, and broadcast an EIP-1559 transaction. */
   private async sendTransaction(to: string, data: string): Promise<string> {
-    const { signAsync } = await import('@noble/secp256k1')
-    const { keccak_256 } = await import('@noble/hashes/sha3.js')
-    const { bytesToHex, hexToBytes } = await import('@noble/hashes/utils.js')
-    const { rlpEncode, bigintToRlpBytes, hexToRlpBytes } = await import('./rlp')
-
-    const sender = await this.getSenderAddress()
-
-    // 1. Get nonce
-    const nonceHex = await this.rpcCall('eth_getTransactionCount', [sender, 'latest']) as string
-    const nonce = BigInt(nonceHex)
-
-    // 2. Estimate gas (with 1M fallback)
-    let gasLimit: bigint
-    try {
-      const gasHex = await this.rpcCall('eth_estimateGas', [{
-        from: sender,
-        to,
-        data,
-      }]) as string
-      // Add 20% buffer
-      gasLimit = BigInt(gasHex) * 120n / 100n
-    } catch {
-      gasLimit = 1_000_000n
-    }
-
-    // 3. Get base fee and compute EIP-1559 gas prices (L2-optimized)
-    let maxPriorityFeePerGas: bigint
-    let maxFeePerGas: bigint
-    try {
-      const gasPriceHex = await this.rpcCall('eth_gasPrice', []) as string
-      const basePrice = BigInt(gasPriceHex)
-      // On L2s (Base), base fee is sub-gwei. Use small tip + 3x headroom.
-      maxPriorityFeePerGas = basePrice < 1_000_000_000n ? 1_000n : 1_500_000_000n
-      maxFeePerGas = basePrice * 3n + maxPriorityFeePerGas
-    } catch {
-      maxPriorityFeePerGas = 1_000n
-      maxFeePerGas = 100_000_000n // 0.1 gwei fallback for L2
-    }
-
-    // 4. Build EIP-1559 tx fields
-    const chainId = BigInt(this.chainId)
-    const toBytes = hexToRlpBytes(to)
-    const dataBytes = hexToRlpBytes(data)
-
-    const txFields = [
-      bigintToRlpBytes(chainId),
-      bigintToRlpBytes(nonce),
-      bigintToRlpBytes(maxPriorityFeePerGas),
-      bigintToRlpBytes(maxFeePerGas),
-      bigintToRlpBytes(gasLimit),
-      toBytes,
-      bigintToRlpBytes(0n), // value = 0
-      dataBytes,
-      [], // accessList = empty
-    ]
-
-    // 5. Sign: keccak256(0x02 || rlpEncode(fields))
-    const unsignedRlp = rlpEncode(txFields)
-    const txForSigning = new Uint8Array([0x02, ...unsignedRlp])
-    const txHash = keccak_256(txForSigning)
-
-    // noble v3 'recovered' format: recovery(1) || r(32) || s(32)
-    const sigBytes = await signAsync(txHash, hexToBytes(this.privateKey), { prehash: false, format: 'recovered' }) as unknown as Uint8Array
-    const recovery = sigBytes[0] // EIP-1559 v is just 0 or 1, NOT +27
-    const r = sigBytes.slice(1, 33)
-    const s = sigBytes.slice(33, 65)
-
-    // 6. Build signed tx: 0x02 || rlpEncode([...fields, v, r, s])
-    const signedFields = [
-      ...txFields,
-      bigintToRlpBytes(BigInt(recovery)),
-      r,
-      s,
-    ]
-    const signedRlp = rlpEncode(signedFields)
-    const signedTx = new Uint8Array([0x02, ...signedRlp])
-
-    // 7. Broadcast
-    const result = await this.rpcCall('eth_sendRawTransaction', [
-      '0x' + bytesToHex(signedTx),
-    ]) as string
-
-    return result
+    return sendSignedTransaction({
+      rpcCall: this.rpcCall.bind(this),
+      privateKey: this.privateKey,
+      chainId: this.chainId,
+      to,
+      data,
+      gasLimitFallback: 1_000_000n, // Factory deploys need higher gas
+    })
   }
 }
 

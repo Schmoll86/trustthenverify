@@ -34,8 +34,8 @@ const sellerAgentId = crypto.randomUUID()
 
 function seedAgents() {
   mockDb.seedTable('agents', [
-    { id: buyerAgentId, public_key: buyer.publicKey, name: 'buyer', capabilities: [], metadata: {}, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), stripe_customer_id: null, stripe_connected_account_id: null, stripe_onboarding_complete: false, stripe_default_payment_method: null },
-    { id: sellerAgentId, public_key: seller.publicKey, name: 'seller', capabilities: [], metadata: {}, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), stripe_customer_id: null, stripe_connected_account_id: null, stripe_onboarding_complete: false, stripe_default_payment_method: null },
+    { id: buyerAgentId, public_key: buyer.publicKey, name: 'buyer', capabilities: [], metadata: {}, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), stripe_customer_id: null, stripe_connected_account_id: null, stripe_onboarding_complete: false, stripe_default_payment_method: null, email: null, notification_preferences: null, webhook_url: null, webhook_secret: null },
+    { id: sellerAgentId, public_key: seller.publicKey, name: 'seller', capabilities: [], metadata: {}, created_at: new Date().toISOString(), last_seen_at: new Date().toISOString(), stripe_customer_id: null, stripe_connected_account_id: null, stripe_onboarding_complete: false, stripe_default_payment_method: null, email: null, notification_preferences: null, webhook_url: null, webhook_secret: null },
   ])
 }
 

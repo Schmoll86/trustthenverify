@@ -83,6 +83,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       stripe_connected_account_id: null,
       stripe_onboarding_complete: false,
       stripe_default_payment_method: 'pm_buyer_test',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'seller-id',
@@ -96,6 +100,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       stripe_connected_account_id: 'acct_seller_test',
       stripe_onboarding_complete: true,
       stripe_default_payment_method: 'pm_seller_test',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
   ])
 }

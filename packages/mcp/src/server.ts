@@ -26,7 +26,7 @@ function fail(err: unknown) {
 }
 
 // ---------------------------------------------------------------------------
-// createServer — registers all 41 tools on the McpServer instance
+// createServer — registers all 45 tools on the McpServer instance
 // ---------------------------------------------------------------------------
 
 // Wrapper to avoid TS2589 "Type instantiation is excessively deep" from McpServer generics
@@ -118,7 +118,7 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
       ]).optional().describe('How delivery is verified (default: buyer_confirm)'),
       timeoutSeconds: z.number().optional().describe('Escrow timeout in seconds (default: 3600)'),
       collateralRatio: z.number().optional().describe('Seller collateral as fraction of amount (default: 0.5)'),
-      fundingMode: z.enum(['stripe', 'onchain']).optional().describe('Payment method (default: stripe)'),
+      fundingMode: z.enum(['stripe', 'onchain', 'x402']).optional().describe('Payment method: stripe (card), onchain (contract), x402 (USDC direct)'),
       buyerAddress: z.string().optional().describe('Buyer Ethereum address (on-chain only)'),
       sellerAddress: z.string().optional().describe('Seller Ethereum address (on-chain only)'),
     },
@@ -586,6 +586,53 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     {},
     async () => {
       try { return ok(await protocol.getStripeStatus()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 42. trust_x402_pay
+  tool(server,
+    'trust_x402_pay',
+    'Pay for an x402 escrow with a USDC transaction hash on Base. The single-call payment tool for programmatic agent commerce.',
+    {
+      escrowId: z.string().describe('Escrow ID'),
+      txHash: z.string().describe('USDC transfer transaction hash on Base'),
+    },
+    async ({ escrowId, txHash }) => {
+      try { return ok(await protocol.x402Pay(escrowId, txHash)) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 43. trust_x402_balance
+  tool(server,
+    'trust_x402_balance',
+    'Check your USDC balance on Base L2. Uses your derived Ethereum address.',
+    {},
+    async () => {
+      try { return ok(await protocol.checkUsdcBalance()) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 44. trust_x402_address
+  tool(server,
+    'trust_x402_address',
+    'Get your Ethereum address derived from your agent key. Use this to receive USDC or check balances.',
+    {},
+    async () => {
+      try { return ok({ address: protocol.getEthAddress() }) }
+      catch (err) { return fail(err) }
+    },
+  )
+
+  // 45. trust_register_webhook
+  tool(server,
+    'trust_register_webhook',
+    'Register a webhook URL for instant notifications about escrow events. Returns the webhook secret for HMAC verification.',
+    { url: z.string().describe('Webhook URL to receive POST notifications') },
+    async ({ url }) => {
+      try { return ok(await protocol.registerWebhook(url)) }
       catch (err) { return fail(err) }
     },
   )

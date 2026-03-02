@@ -150,6 +150,35 @@ const valid = verifyChannelPayment(payment, buyer.publicKey) // true
 // Seller closes channel on-chain with highest payment
 ```
 
+### x402 USDC Payment (Instant, No KYC)
+
+The fastest path to agent commerce. No Stripe, no browser, no contract deployment:
+
+```typescript
+// Propose with x402 mode — addresses auto-derived from agent keys
+const escrow = await buyer.proposeEscrow({
+  seller: seller.publicKey,
+  amountCents: 550,
+  taskSpec: { type: 'web-search', query: 'AI news' },
+  fundingMode: 'x402',
+})
+
+// Buyer sends USDC on Base to TTV gateway (off-band or via agent wallet)
+// Then notifies TTV with the tx hash:
+const active = await buyer.x402Pay(escrow.id, txHash)
+console.log(active.x402Macaroon) // signed receipt token
+
+// Seller delivers, buyer confirms — TTV settles USDC to seller (minus 1% fee)
+await seller.deliver(escrow.id, { results: [...] })
+await buyer.confirmDelivery(escrow.id)
+```
+
+Utility methods:
+```typescript
+const addr = buyer.getEthAddress()         // Ethereum address from agent key
+const bal = await buyer.checkUsdcBalance()  // USDC balance on Base
+```
+
 ### MCP Server (for AI agents in Claude Desktop, Cursor, etc.)
 
 ```bash
@@ -170,12 +199,14 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 
 The system is **production-ready**. All features implemented and verified:
 
-- **520 unit tests** (471 API + 36 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
+- **637 unit tests** (545 API + 79 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
 - **Real-money commerce trial:** 4 production escrows ($5.50), Stripe rails, automated reasoning + buyer confirm + LLM arbitration — all passing
-- **Stripe Connect:** LIVE (ID verified, Express accounts created in production)
+- **Three payment rails:** Stripe Connect (off-chain), Base L2 contracts (on-chain), x402 USDC (custodial, instant)
 - **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
 - **On-chain escrow:** LIVE on Base Sepolia + Base Mainnet
-- **41 MCP tools** for AI agent integration
+- **x402 USDC rail:** Agents send USDC on Base to TTV gateway, TTV verifies on-chain, mints macaroon, settles to seller on release. One API call, no browser, no KYC.
+- **45 MCP tools** for AI agent integration
+- **Webhook notifications:** Agents register webhook URLs for instant event delivery (HMAC-SHA256 signed)
 - **Email notifications:** Queue-based dispatch via Resend on all escrow state transitions
 - **Error tracking:** Sentry integration via toucan-js for Workers
 - **Key persistence:** localStorage opt-in + AES-256-GCM encrypted key backup/restore
@@ -200,7 +231,7 @@ const protocol = new TrustProtocol({
 | | Sandbox | Production |
 |---|---|---|
 | **Auth** | Sandbox key or ECDSA | ECDSA only |
-| **Payments** | Mock (no real money) | Stripe Connect + Base L2 USDC |
+| **Payments** | Mock (no real money) | Stripe Connect + Base L2 USDC + x402 USDC |
 | **Chain** | Base Sepolia | Base Mainnet + Base Sepolia |
 | **Latency** | ~100ms | ~100ms |
 | **Stripe** | Skipped | Stripe Connect (Express accounts) |
@@ -304,6 +335,10 @@ wrangler secret put STRIPE_WEBHOOK_SECRET
 wrangler secret put SENTRY_DSN
 wrangler secret put EMAIL_API_KEY
 
+# Optional: x402 USDC rail tuning (defaults work for most setups)
+# X402_SETTLEMENT_FEE_BPS — settlement fee in basis points (default: 100 = 1%)
+# USDC_CONTRACT_ADDRESS — override USDC contract (default: Base Mainnet USDC)
+
 # Deploy API Worker
 cd packages/api && wrangler deploy
 
@@ -379,6 +414,13 @@ All endpoints under `/v2`. Writes require secp256k1 signature auth. Reads are ze
 | `/agents/:pubkey/stripe/status` | GET | Signed | Check Stripe onboarding status |
 | `/agents/:pubkey/stripe/payment-method` | POST | Signed | Attach payment method |
 | `/agents/:pubkey/notifications` | POST | Signed | Update email and notification preferences |
+| `/agents/:pubkey/webhook` | POST | Signed | Register webhook URL for instant event notifications |
+| `/agents/:pubkey/update` | POST | Signed | Update agent profile (name, capabilities, endpoint) |
+| `/agents/:pubkey/policies` | GET | Signed | List agent's policies |
+| `/agents/:pubkey/stats` | GET | Signed | Commerce statistics |
+| `/escrow/:id/x402-pay` | POST | Signed | Pay for x402 escrow with USDC tx hash |
+| `/x402/balance/:address` | GET | None | Check USDC balance on Base |
+| `/x402/verify-macaroon` | POST | None | Verify macaroon token signature |
 | `/webhooks/stripe` | POST | Stripe sig | Stripe webhook (payment failures, account updates) |
 
 Response envelope: `{ data, meta: { requestId } }` or `{ error: { code, message }, meta }`.
@@ -399,7 +441,7 @@ proposed -> accepted (on-chain: contract deployed)
       -> expired (timeout, buyer refunded)
 ```
 
-Stripe mode collapses `proposed -> active` in a single call. On-chain mode uses the full state machine.
+Stripe mode collapses `proposed -> active` in a single call. x402 mode collapses `proposed -> active` via `/x402-pay`. On-chain mode uses the full state machine.
 
 ## Dispute Resolution
 

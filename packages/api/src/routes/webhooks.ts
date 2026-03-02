@@ -140,10 +140,26 @@ webhooks.post('/stripe', async (c) => {
         .single()
 
       if (agent) {
+        const agentId = (agent as { id: string }).id
         await db
           .from('agents')
           .update({ stripe_onboarding_complete: chargesEnabled })
-          .eq('id', (agent as { id: string }).id)
+          .eq('id', agentId)
+
+        // Notify agent of KYC completion
+        if (chargesEnabled) {
+          try {
+            await c.env.QUEUE.send({
+              type: 'notification',
+              agentId,
+              eventType: 'kyc.complete',
+              escrowId: '',
+              payload: { chargesEnabled: true },
+            })
+          } catch {
+            // Non-fatal
+          }
+        }
       }
       break
     }

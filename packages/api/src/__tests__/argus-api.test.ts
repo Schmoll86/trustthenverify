@@ -86,6 +86,10 @@ function seedAgent(keypair: { publicKey: string }) {
     parent_id: null,
     created_at: new Date().toISOString(),
     last_seen_at: new Date().toISOString(),
+    email: null,
+    notification_preferences: null,
+    webhook_url: null,
+    webhook_secret: null,
   }])
 }
 

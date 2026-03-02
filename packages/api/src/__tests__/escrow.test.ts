@@ -72,6 +72,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       stripe_connected_account_id: null,
       stripe_onboarding_complete: false,
       stripe_default_payment_method: 'pm_buyer_test',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
     {
       id: 'seller-id',
@@ -87,6 +91,10 @@ function seedAgents(buyer: { publicKey: string }, seller: { publicKey: string })
       stripe_connected_account_id: 'acct_seller_test',
       stripe_onboarding_complete: true,
       stripe_default_payment_method: 'pm_seller_test',
+      email: null,
+      notification_preferences: null,
+      webhook_url: null,
+      webhook_secret: null,
     },
   ])
 }
@@ -112,6 +120,7 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     dispute_resolution: 'burn',
     status: 'proposed',
     proof: null,
+    deliverable: null,
     timeout_seconds: 3600,
     created_at: new Date().toISOString(),
     funded_at: null,
@@ -125,6 +134,11 @@ function seedEscrow(overrides: Record<string, unknown> = {}) {
     chain_id: null,
     tx_hash: null,
     delivery_attempts: 0,
+    oracle_fee_cents: 0,
+    x402_tx_hash: null,
+    x402_macaroon: null,
+    x402_settlement_fee_cents: 0,
+    x402_seller_payout_tx: null,
     ...overrides,
   }
   mockDb.seedTable('escrows', [escrow])
@@ -216,6 +230,20 @@ describe('POST /v2/escrow/propose', () => {
 
     const res = await makeSignedRequest('POST', '/v2/escrow/propose', body, buyer)
     expect(res.status).toBe(400)
+  })
+
+  it('defaults sellerCollateral to 50% of amountCents when omitted', async () => {
+    const body = JSON.stringify({
+      seller: seller.publicKey,
+      amountCents: 10000,
+      taskSpec: { type: 'web-search', query: 'test' },
+    })
+
+    const res = await makeSignedRequest('POST', '/v2/escrow/propose', body, buyer)
+    expect(res.status).toBe(201)
+
+    const json = await res.json() as { data: { sellerCollateral: number } }
+    expect(json.data.sellerCollateral).toBe(5000)
   })
 
   it('rejects amountCents <= 0', async () => {
@@ -347,7 +375,7 @@ describe('POST /v2/escrow/:id/deliver', () => {
 
     const body = JSON.stringify({ deliverable: { data: 'test' } })
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/deliver', body, seller)
-    expect(res.status).toBe(409)
+    expect(res.status).toBe(408)
   })
 })
 
