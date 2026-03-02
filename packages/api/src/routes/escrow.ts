@@ -442,6 +442,11 @@ escrow.post('/:id/accept', async (c) => {
 
   const fundingMode = (escrowRow as unknown as Record<string, unknown>).funding_mode as string ?? 'stripe'
 
+  // x402 escrows are funded via POST /escrow/:id/x402-pay, not accept
+  if (fundingMode === 'x402') {
+    return error(c, 400, 'INVALID_PARAMS', 'x402 escrows are funded via POST /escrow/:id/x402-pay, not accept')
+  }
+
   if (fundingMode === 'onchain') {
     let contractAddress = 'sandbox_mock_contract'
     let txHash = 'sandbox_mock_tx'

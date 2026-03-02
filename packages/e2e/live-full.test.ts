@@ -216,7 +216,7 @@ describe('Production — Escrow Propose', { timeout: 30_000 }, () => {
   const buyer = generateKeypair()
   const seller = generateKeypair()
 
-  it('proposes escrow (Stripe mode)', async () => {
+  it('proposes escrow (x402 mode)', async () => {
     await authedFetch('POST', '/v2/agents', { publicKey: buyer.publicKey, name: 'live-esc-buyer' }, buyer)
     await authedFetch('POST', '/v2/agents', { publicKey: seller.publicKey, name: 'live-esc-seller' }, seller)
 
@@ -225,11 +225,25 @@ describe('Production — Escrow Propose', { timeout: 30_000 }, () => {
       amountCents: 100,
       taskSpec: { type: 'data-retrieval', query: 'live test' },
       verificationMethod: 'buyer_confirm',
+      fundingMode: 'x402',
     }, buyer)
     expect(status).toBe(201)
     const d = data as Record<string, unknown>
     expect(d.status).toBe('proposed')
     expect(d.amountCents).toBe(100)
+    expect(d.fundingMode).toBe('x402')
+    expect(d.x402PaymentInstructions).toBeDefined()
+  })
+
+  it('Stripe propose requires payment method (fail-fast)', async () => {
+    const { status, error } = await authedFetch('POST', '/v2/escrow/propose', {
+      seller: seller.publicKey,
+      amountCents: 100,
+      taskSpec: { type: 'data-retrieval', query: 'stripe fail-fast' },
+      verificationMethod: 'buyer_confirm',
+    }, buyer)
+    expect(status).toBe(400)
+    expect(error?.code).toBe('PAYMENT_NOT_CONFIGURED')
   })
 
   it('proposes on-chain escrow', async () => {
@@ -247,18 +261,20 @@ describe('Production — Escrow Propose', { timeout: 30_000 }, () => {
     expect((data as Record<string, unknown>).fundingMode).toBe('onchain')
   })
 
-  it('accept requires Stripe setup (expected)', async () => {
+  it('x402 escrow rejects accept (must use x402-pay)', async () => {
     const { data: escrow } = await authedFetch('POST', '/v2/escrow/propose', {
       seller: seller.publicKey,
       amountCents: 100,
-      taskSpec: { type: 'data-retrieval', query: 'stripe check' },
+      taskSpec: { type: 'data-retrieval', query: 'x402 accept check' },
       verificationMethod: 'buyer_confirm',
+      fundingMode: 'x402',
     }, buyer)
     const escrowId = (escrow as Record<string, unknown>).id as string
 
+    // Accept should fail — x402 escrows use POST /escrow/:id/x402-pay
     const { status, error } = await authedFetch('POST', `/v2/escrow/${escrowId}/accept`, {}, seller)
     expect(status).toBe(400)
-    expect(error?.code).toBe('STRIPE_NOT_CONFIGURED')
+    expect(error?.code).toBe('INVALID_PARAMS')
   })
 })
 
