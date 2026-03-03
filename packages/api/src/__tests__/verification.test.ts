@@ -330,6 +330,77 @@ describe('Automated verification: schema_validation', () => {
   })
 })
 
+describe('Automated verification: hash_match', () => {
+  let buyer: ReturnType<typeof generateKeypair>
+  let seller: ReturnType<typeof generateKeypair>
+
+  beforeEach(() => {
+    mockDb = createMockDb()
+    mockStripe.reset()
+    mockGateway.reset()
+    buyer = generateKeypair()
+    seller = generateKeypair()
+    seedAgents(buyer, seller)
+    mockDb.seedTable('verifications', [])
+  })
+
+  it('hash match pass → auto-release', async () => {
+    seedEscrow({
+      verification_method: 'hash_match',
+      policy_id: null,
+      task_spec: {
+        type: 'deterministic-compute',
+        expected_hash: 'will_be_matched_by_mock',
+      },
+    })
+    mockGateway.setResult({
+      result: 'pass',
+      constraintsTotal: 1,
+      constraintsPassed: 1,
+      failures: [],
+      gatewaySignature: 'sig_hash',
+      verifiedAt: new Date().toISOString(),
+    })
+
+    const body = JSON.stringify({ deliverable: { result: 42 } })
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/deliver', body, seller)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: { status: string } }
+    expect(json.data.status).toBe('released')
+
+    // Gateway called with hash_match method
+    expect(mockGateway.calls).toHaveLength(1)
+    expect(mockGateway.calls[0].params.verificationMethod).toBe('hash_match')
+  })
+
+  it('hash mismatch → auto-fail', async () => {
+    seedEscrow({
+      verification_method: 'hash_match',
+      policy_id: null,
+      task_spec: {
+        type: 'deterministic-compute',
+        expected_hash: 'deadbeef',
+      },
+    })
+    mockGateway.setResult({
+      result: 'fail',
+      constraintsTotal: 1,
+      constraintsPassed: 0,
+      failures: [{ id: '_hash_match', error: 'Hash mismatch' }],
+      gatewaySignature: 'sig_fail',
+      verifiedAt: new Date().toISOString(),
+    })
+
+    const body = JSON.stringify({ deliverable: { result: 'wrong' } })
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-1/deliver', body, seller)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: { status: string } }
+    expect(json.data.status).toBe('failed')
+  })
+})
+
 describe('buyer_confirm still works after Phase 2', () => {
   let buyer: ReturnType<typeof generateKeypair>
   let seller: ReturnType<typeof generateKeypair>

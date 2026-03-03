@@ -13,7 +13,7 @@ import { disputes } from './routes/disputes'
 import { oracles } from './routes/oracles'
 import { channels } from './routes/channels'
 import { marketplace } from './routes/marketplace'
-import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement, handleOraclePayouts } from './cron/escrow-timeout'
+import { handleEscrowTimeout, handleOnchainFunding, handleOracleTimeout, handleAutoRefinement, handleOraclePayouts, handlePolicyStaleness } from './cron/escrow-timeout'
 import { webhooks } from './routes/webhooks'
 import { x402 } from './routes/x402'
 import { handleArgusMessage, type ArgusQueueMessage } from './queue/argus-consumer'
@@ -124,6 +124,7 @@ export default {
     await handleOracleTimeout(env)
     await handleAutoRefinement(env)
     await handleOraclePayouts(env)
+    await handlePolicyStaleness(env)
   },
   async queue(batch: MessageBatch<ArgusQueueMessage | OracleQueueMessage | NotificationQueueMessage>, env: Env) {
     for (const msg of batch.messages) {

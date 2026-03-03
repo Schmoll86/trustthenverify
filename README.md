@@ -197,9 +197,9 @@ This generates a secp256k1 keypair, registers on sandbox, and prints config JSON
 
 ### Status
 
-The system is **production-ready**. All features implemented and verified:
+The system is **production-ready** for `automated_reasoning`, `schema_validation`, `hash_match`, `buyer_confirm`, and `oracle_consensus` verification methods. `zkml_proof` is planned for a future release.
 
-- **637 unit tests** (545 API + 79 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
+- **648+ unit tests** (556 API + 79 SDK + 13 MCP) + 49 Foundry + 83+ E2E tests (31 prod API + 19 on-chain + 33 agent-driven)
 - **Real-money commerce trial:** 4 production escrows ($5.50), Stripe rails, automated reasoning + buyer confirm + LLM arbitration — all passing
 - **Three payment rails:** Stripe Connect (off-chain), Base L2 contracts (on-chain), x402 USDC (custodial, instant)
 - **Stripe Webhooks:** `POST /webhooks/stripe` handles `payment_intent.payment_failed`, `account.updated`
@@ -257,8 +257,9 @@ packages/
 
 | Method | Speed | Trust Level | Use Case |
 |---|---|---|---|
-| `automated_reasoning` | <100ms | Highest (deterministic) | Structured outputs with formal policy |
+| `hash_match` | <1ms | Deterministic | Buyer knows exact expected output |
 | `schema_validation` | <10ms | High | JSON schema conformance |
+| `automated_reasoning` | <100ms | Highest (deterministic) | Structured outputs with formal policy |
 | `buyer_confirm` | Manual | Moderate | Subjective quality judgment |
 | `oracle_consensus` | Seconds | High | Multi-agent agreement |
 | `zkml_proof` | Future | Trustless | Cryptographic execution proof |
@@ -335,9 +336,18 @@ wrangler secret put STRIPE_WEBHOOK_SECRET
 wrangler secret put SENTRY_DSN
 wrangler secret put EMAIL_API_KEY
 
-# Optional: x402 USDC rail tuning (defaults work for most setups)
+# Optional: Base L2 on-chain escrow
+wrangler secret put BASE_RPC_URL             # Alchemy/Infura RPC (contains API key)
+wrangler secret put GATEWAY_EOA_PRIVATE_KEY  # Ethereum tx signing (falls back to GATEWAY_PRIVATE_KEY)
+
+# Optional: tuning (env vars with defaults)
 # X402_SETTLEMENT_FEE_BPS — settlement fee in basis points (default: 100 = 1%)
 # USDC_CONTRACT_ADDRESS — override USDC contract (default: Base Mainnet USDC)
+# ORACLE_FEE_CENTS — oracle surcharge per escrow (default: 500 = $5.00)
+# AUTO_REFINE_DISPUTE_THRESHOLD — disputes before auto-refinement triggers (default: 3)
+# ARBITRATION_MODEL — LLM for dispute arbitration (default: google/gemini-2.5-flash)
+# TRANSLATOR_MODEL — LLM for NL-to-formal spec translation (default: google/gemini-2.5-flash)
+# CROSS_VALIDATOR_MODEL — LLM for cross-validation (default: google/gemini-2.5-flash-lite)
 
 # Deploy API Worker
 cd packages/api && wrangler deploy

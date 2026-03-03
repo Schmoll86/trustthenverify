@@ -355,6 +355,71 @@ export async function handleOraclePayouts(
   return { paid, skipped }
 }
 
+/** Policy staleness: flag active policies with >5% dispute rate over rolling 30 days (SPEC §3.1.3). */
+export async function handlePolicyStaleness(
+  env: Env,
+): Promise<{ flagged: number }> {
+  const db = createDb(env)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  // Get all active policies
+  const { data: activePolicies } = await db
+    .from('policies')
+    .select('id, created_by')
+    .eq('status', 'active')
+
+  if (!activePolicies || activePolicies.length === 0) {
+    return { flagged: 0 }
+  }
+
+  let flagged = 0
+
+  for (const policy of activePolicies) {
+    const policyId = policy.id as string
+
+    // Count total completed escrows using this policy in last 30 days
+    const { data: totalEscrows } = await db
+      .from('escrows')
+      .select('id')
+      .eq('policy_id', policyId)
+      .in('status', ['released', 'failed', 'disputed', 'expired'])
+      .gte('created_at', thirtyDaysAgo)
+
+    const totalCount = totalEscrows?.length ?? 0
+    if (totalCount < 5) continue // Not enough data to judge — skip
+
+    // Count disputed escrows
+    const { data: disputedEscrows } = await db
+      .from('escrows')
+      .select('id')
+      .eq('policy_id', policyId)
+      .eq('status', 'disputed')
+      .gte('created_at', thirtyDaysAgo)
+
+    const disputeCount = disputedEscrows?.length ?? 0
+    const disputeRate = disputeCount / totalCount
+
+    if (disputeRate > 0.05) {
+      // Flag as stale
+      await db
+        .from('policies')
+        .update({ status: 'stale' })
+        .eq('id', policyId)
+
+      // Notify creator
+      await notifyCron(env, policy.created_by as string, 'policy.stale', policyId, {
+        disputeRate: Math.round(disputeRate * 100),
+        disputeCount,
+        totalCount,
+      })
+
+      flagged++
+    }
+  }
+
+  return { flagged }
+}
+
 function createOnchainService(env: Env): OnchainService {
   return new RealOnchainService(
     env.BASE_RPC_URL ?? 'https://mainnet.base.org',

@@ -84,6 +84,8 @@ export class RealGatewayService implements GatewayService {
         return await this.verifyAutomatedReasoning(params, verifiedAt)
       } else if (params.verificationMethod === 'schema_validation') {
         return await this.verifySchemaValidation(params, verifiedAt)
+      } else if (params.verificationMethod === 'hash_match') {
+        return await this.verifyHashMatch(params, verifiedAt)
       }
       throw new Error(`Unsupported verification method: ${params.verificationMethod}`)
     } catch (err) {
@@ -150,6 +152,40 @@ export class RealGatewayService implements GatewayService {
       constraintsTotal: 1,
       constraintsPassed: valid ? 1 : 0,
       failures: valid ? [] : [{ id: '_schema', error: 'Deliverable does not match expected schema' }],
+      gatewaySignature: signature,
+      verifiedAt,
+    }
+  }
+
+  private async verifyHashMatch(
+    params: { escrowId: string; deliverable: unknown; taskSpec: Record<string, unknown> },
+    verifiedAt: string,
+  ): Promise<GatewayVerificationResult> {
+    const expectedHash = params.taskSpec.expected_hash as string | undefined
+    if (!expectedHash) {
+      throw new Error('taskSpec.expected_hash is required for hash_match')
+    }
+
+    // Compute SHA-256 of JSON.stringify(deliverable) — matches the proof hash in escrow.ts
+    const { sha256 } = await import('@noble/hashes/sha2.js')
+    const { bytesToHex } = await import('@noble/hashes/utils.js')
+    const actualHash = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(params.deliverable))))
+
+    const matched = actualHash === expectedHash.toLowerCase()
+    const result = matched ? 'pass' as const : 'fail' as const
+
+    const signature = await this.sign(
+      params.escrowId, result, 1, matched ? 1 : 0, verifiedAt,
+    )
+
+    return {
+      result,
+      constraintsTotal: 1,
+      constraintsPassed: matched ? 1 : 0,
+      failures: matched ? [] : [{
+        id: '_hash_match',
+        error: `Hash mismatch: expected ${expectedHash}, got ${actualHash}`,
+      }],
       gatewaySignature: signature,
       verifiedAt,
     }

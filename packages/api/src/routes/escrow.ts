@@ -741,7 +741,7 @@ escrow.post('/:id/deliver', async (c) => {
     return success(c, snakeToCamel<Escrow>(updated))
   }
 
-  if (method === 'automated_reasoning' || method === 'schema_validation') {
+  if (method === 'automated_reasoning' || method === 'schema_validation' || method === 'hash_match') {
     const gateway = getGateway(c as unknown as { env: Env; get(key: 'gateway'): GatewayService | undefined })
 
     let vResult
