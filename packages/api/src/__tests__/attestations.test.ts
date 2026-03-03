@@ -198,6 +198,22 @@ describe('POST /v2/attestations', () => {
     expect(json.data.escrowId).toBe('escrow-abc')
   })
 
+  it('creates attestation using subject public key (not just UUID)', async () => {
+    const body = JSON.stringify({
+      subjectId: subjectKp.publicKey,
+      outcome: 'success',
+      verificationMethod: 'buyer_confirm',
+    })
+
+    const res = await makeSignedRequest('POST', '/v2/attestations', body, authorKp)
+    expect(res.status).toBe(201)
+
+    const json = await res.json() as { data: Record<string, unknown> }
+    // Should resolve to the UUID, not store the public key
+    expect(json.data.subjectId).toBe('subject-agent-id')
+    expect(json.data.outcome).toBe('success')
+  })
+
   it('supports all valid outcome values', async () => {
     for (const outcome of ['success', 'failure', 'timeout', 'partial']) {
       const body = JSON.stringify({ subjectId: 'subject-agent-id', outcome })

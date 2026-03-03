@@ -55,11 +55,12 @@ attestations.post('/', async (c) => {
 
   const db = createDb(c.env)
 
-  // Verify subject agent exists
+  // Verify subject agent exists — accept either public key (66 hex chars) or UUID
+  const isPublicKey = /^[0-9a-f]{66}$/i.test(subjectId)
   const { data: subjectAgent } = await db
     .from('agents')
     .select('id, public_key')
-    .eq('id', subjectId)
+    .eq(isPublicKey ? 'public_key' : 'id', subjectId)
     .single()
 
   if (!subjectAgent) {
@@ -117,12 +118,12 @@ attestations.post('/', async (c) => {
     }
   }
 
-  // Insert into DB
+  // Insert into DB — always store the UUID, even if caller passed a public key
   const { data: row } = await db
     .from('attestations')
     .insert({
       author_id: agentId,
-      subject_id: subjectId,
+      subject_id: subjectAgent.id,
       escrow_id: escrowId ?? null,
       outcome,
       verification_method: verificationMethod ?? null,
