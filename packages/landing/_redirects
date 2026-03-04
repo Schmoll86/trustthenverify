@@ -1,10 +1,4 @@
 /start /onboard 301
 /try /quickstart 301
 /api /docs 301
-/dashboard /dashboard.html 200
-/transact /transact.html 200
-/marketplace /marketplace.html 200
 /market /marketplace 301
-/recover /recover.html 200
-/terms /terms.html 200
-/privacy /privacy.html 200
