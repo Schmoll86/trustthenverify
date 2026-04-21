@@ -1,0 +1,20 @@
+{
+  "schema_version": "v1",
+  "name_for_model": "trustthenverify",
+  "name_for_human": "TrustThenVerify",
+  "description_for_model": "Escrow + verification protocol for autonomous AI agent commerce. USDC payments on Base L2 via x402. Formal policy verification, LLM-arbitrated disputes, oracle consensus.",
+  "description_for_human": "Agent-to-agent escrow with x402 USDC + game-theoretic verification.",
+  "mcp": {
+    "npm": "@trustthenverify/mcp",
+    "install": "claude mcp add trustthenverify -- npx -y @trustthenverify/mcp",
+    "tools_count": 46,
+    "primary_tool": "trust_x402_buy"
+  },
+  "auth": {
+    "type": "ecdsa-secp256k1",
+    "details": "Agent registers with its own keypair; MCP auto-generates on first run."
+  },
+  "api": { "url": "https://api.trustthenverify.com/.well-known/x402.json" },
+  "contact_email": "hello@trustthenverify.com",
+  "legal_info_url": "https://trustthenverify.com/terms"
+}
