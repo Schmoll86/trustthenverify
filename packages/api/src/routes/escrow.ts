@@ -319,6 +319,17 @@ escrow.post('/:id/x402-pay', async (c) => {
     return error(c, 400, 'INVALID_PARAMS', 'x402-pay is only for x402 funding mode escrows')
   }
 
+  // Idempotency: if this escrow has already been paid with the same txHash,
+  // return the current state with 200 instead of a 409 INVALID_STATE. This
+  // lets a naive retry (network timeout, agent re-send) converge cleanly
+  // instead of surfacing a confusing error the agent cannot act on.
+  // A DIFFERENT txHash on a non-proposed escrow is a real error (wrong tx) —
+  // fall through to the state-machine check below.
+  if (escrowRow.x402_tx_hash && escrowRow.x402_tx_hash === body.txHash) {
+    const camelRow = snakeToCamel<Escrow>(escrowRow)
+    return success(c, { ...camelRow, x402Macaroon: escrowRow.x402_macaroon ?? '' })
+  }
+
   // Must be proposed
   if (!canTransition(escrowRow.status as 'proposed', 'x402_pay')) {
     return error(c, 409, 'INVALID_STATE', `Cannot pay in status: ${escrowRow.status}`)
@@ -927,7 +938,17 @@ escrow.post('/:id/confirm', async (c) => {
     return error(c, 403, 'FORBIDDEN', 'Only the buyer can confirm delivery')
   }
 
-  // Must be delivered
+  // Idempotency: confirm is semantically "I attest delivery is acceptable."
+  // A retry after the first success should return the current state, not
+  // error. Without this, a network timeout on the first /confirm leads the
+  // agent to an INVALID_STATE 409 on retry, which is uninterpretable —
+  // did the original call succeed or not?
+  if (escrowRow.status === 'released') {
+    return success(c, snakeToCamel<Escrow>(escrowRow))
+  }
+
+  // Must be delivered (or, with this idempotency block, 'released' already
+  // handled above). Any other status is a real error.
   if (!canTransition(escrowRow.status as 'delivered', 'confirm')) {
     return error(c, 409, 'INVALID_STATE', `Cannot confirm in status: ${escrowRow.status}`)
   }

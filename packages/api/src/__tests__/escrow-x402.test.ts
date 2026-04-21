@@ -254,6 +254,37 @@ describe('POST /v2/escrow/:id/x402-pay', () => {
     expect(res.status).toBe(409)
   })
 
+  it('returns 200 on retry with SAME txHash (idempotent)', async () => {
+    // Agent-trust contract: a naive retry after a network timeout must converge
+    // to the same successful response, not surface a 409 the agent can't act on.
+    seedX402Escrow({
+      status: 'active',
+      x402_tx_hash: '0xalreadyseentxhash',
+      x402_macaroon: 'previously_minted_macaroon',
+    })
+
+    const body = JSON.stringify({ txHash: '0xalreadyseentxhash' })
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-x402-1/x402-pay', body, buyer)
+    expect(res.status).toBe(200)
+    const json = await res.json() as { data: { status: string; x402Macaroon: string } }
+    expect(json.data.status).toBe('active')
+    expect(json.data.x402Macaroon).toBe('previously_minted_macaroon')
+  })
+
+  it('rejects retry with DIFFERENT txHash (not a false idempotency match)', async () => {
+    // A second payment attempt with a different tx hash on an already-paid
+    // escrow is a real error — wrong tx, should not silently succeed.
+    seedX402Escrow({
+      status: 'active',
+      x402_tx_hash: '0xfirstpaymenthash',
+      x402_macaroon: 'previously_minted_macaroon',
+    })
+
+    const body = JSON.stringify({ txHash: '0xdifferenttxhash' })
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-x402-1/x402-pay', body, buyer)
+    expect(res.status).toBe(409) // INVALID_STATE — not proposed
+  })
+
   it('rejects x402-pay for expired proposal', async () => {
     seedX402Escrow({ expires_at: new Date(Date.now() - 1000).toISOString() })
 
@@ -288,6 +319,25 @@ describe('POST /v2/escrow/:id/confirm (x402 settlement)', () => {
       status: 'delivered',
       proof: 'test-proof-hash',
       funded_at: new Date().toISOString(),
+    })
+
+    const res = await makeSignedRequest('POST', '/v2/escrow/escrow-x402-1/confirm', '{}', buyer)
+    expect(res.status).toBe(200)
+
+    const json = await res.json() as { data: { status: string } }
+    expect(json.data.status).toBe('released')
+  })
+
+  it('returns 200 on retry of already-released escrow (idempotent)', async () => {
+    // Agent-trust contract: after /confirm succeeds, a retry must return the
+    // same released state, not 409. Without this, a network timeout on the
+    // first confirm leaves the agent unable to tell whether its payment
+    // completed.
+    seedX402Escrow({
+      status: 'released',
+      proof: 'test-proof-hash',
+      funded_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
     })
 
     const res = await makeSignedRequest('POST', '/v2/escrow/escrow-x402-1/confirm', '{}', buyer)
