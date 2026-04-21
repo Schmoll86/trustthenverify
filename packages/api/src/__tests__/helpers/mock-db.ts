@@ -106,6 +106,16 @@ export function createMockDb() {
         })
         return chain
       },
+      gt(field: string, value: unknown) {
+        filteredRows = filteredRows.filter((r) => {
+          const rVal = r[field]
+          if (typeof rVal === 'string' && typeof value === 'string') {
+            return rVal > value
+          }
+          return (rVal as number) > (value as number)
+        })
+        return chain
+      },
       contains(field: string, jsonStr: string) {
         const arr = JSON.parse(jsonStr)
         filteredRows = filteredRows.filter((r) => {
