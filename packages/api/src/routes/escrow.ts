@@ -1259,6 +1259,7 @@ escrow.post('/:id/dispute', async (c) => {
       status: 'resolved',
       resolved_at: now,
       evidence_hash: JSON.stringify({ rationale: ruling.rationale, confidence: ruling.confidence, fee: feeCents }),
+      ai_cost_cents: ruling.costCents,
     }).eq('id', disputeRecord?.id ?? '')
 
     return success(c, snakeToCamel<Escrow>(finalEscrow ?? disputed))
@@ -1303,6 +1304,7 @@ escrow.post('/:id/dispute', async (c) => {
     status: 'resolved',
     resolved_at: now,
     evidence_hash: JSON.stringify({ rationale: ruling.rationale, confidence: ruling.confidence, fee: feeCents }),
+    ai_cost_cents: ruling.costCents,
   }).eq('id', disputeRecord?.id ?? '')
 
   return success(c, snakeToCamel<Escrow>(finalEscrow ?? disputed))

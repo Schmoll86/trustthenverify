@@ -88,6 +88,7 @@ policies.post('/', async (c) => {
   let crossValidation: Record<string, unknown> | null = null
   let tier2Used = false
   let translatedClauses: Array<{ index: number; text: string; constraint_ids: string[]; status: string }> | null = null
+  let aiCostCents = 0
 
   if (body.formalSpec) {
     // Manual spec provided — validate directly, skip translation
@@ -117,6 +118,7 @@ policies.post('/', async (c) => {
     crossValidation = result.crossValidation as Record<string, unknown> | null
     tier2Used = result.tier2Used
     translatedClauses = result.clauses
+    aiCostCents = result.costCents
   }
   // else: no formalSpec + no API key → draft with empty spec (graceful degradation)
 
@@ -135,6 +137,7 @@ policies.post('/', async (c) => {
     cross_validator: crossValidator,
     cross_validation: crossValidation,
     created_by: callerId,
+    ai_cost_cents: aiCostCents,
   }
 
   const { data: row, error: dbError } = await db
@@ -269,6 +272,14 @@ policies.post('/:id/revise', async (c) => {
     updates.cross_validator = result.crossValidatorModel
     updates.cross_validation = result.crossValidation
     updates.tier2_used = result.tier2Used
+    // Accumulate: each revise adds to lifetime cost on the policy row.
+    // Revise cost stacks additively because the policy row is stable across revisions.
+    if (result.costCents > 0) {
+      const prevCost = typeof (policy as unknown as { ai_cost_cents?: number }).ai_cost_cents === 'number'
+        ? (policy as unknown as { ai_cost_cents: number }).ai_cost_cents
+        : 0
+      updates.ai_cost_cents = prevCost + result.costCents
+    }
 
     // Rebuild coverage rows
     if (result.clauses.length > 0) {
