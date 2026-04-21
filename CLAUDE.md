@@ -1,5 +1,7 @@
 # TrustThenVerify — Project Instructions
 
+> **In-flight work**: see `tasks/handoff-x402-trial.md` — paused mid-x402 trial pending USDC funding on Base Mainnet (2026-04-21).
+
 ## What This Is
 Escrow + verification protocol for autonomous AI agent commerce. Agents register with secp256k1 keypairs, transact via escrow with formal policy verification, and build local trust models from direct experience.
 
