@@ -27,31 +27,35 @@ export class RealArbitrationService implements ArbitrationService {
       { role: 'user' as const, content: arbitrationUserPrompt(evidence) },
     ]
 
+    let costCents = 0
+
     // First attempt
-    const raw = await this.llm.complete({
+    const first = await this.llm.complete({
       model: this.model,
       messages,
       temperature: 0.1,
       maxTokens: 1024,
     })
+    costCents += first.costCents
 
-    const ruling = parseArbitrationRuling(raw)
-    if (ruling) return ruling
+    const ruling = parseArbitrationRuling(first.content)
+    if (ruling) return { ...ruling, costCents }
 
     // One retry on parse failure
-    const raw2 = await this.llm.complete({
+    const second = await this.llm.complete({
       model: this.model,
       messages: [
         ...messages,
-        { role: 'assistant' as const, content: raw },
+        { role: 'assistant' as const, content: first.content },
         { role: 'user' as const, content: 'Your response was not valid JSON. Please respond with ONLY a JSON object: { "ruling": "buyer_wins" | "seller_wins", "rationale": "...", "confidence": 0.0-1.0 }' },
       ],
       temperature: 0.0,
       maxTokens: 512,
     })
+    costCents += second.costCents
 
-    const ruling2 = parseArbitrationRuling(raw2)
-    if (ruling2) return ruling2
+    const ruling2 = parseArbitrationRuling(second.content)
+    if (ruling2) return { ...ruling2, costCents }
 
     throw new Error('Arbitration LLM failed to produce a valid ruling after retry')
   }

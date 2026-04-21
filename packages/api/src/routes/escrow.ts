@@ -13,6 +13,7 @@ import type { OnchainService } from '../lib/onchain'
 import { RealOnchainService } from '../lib/onchain'
 import type { ArbitrationService } from '../lib/arbitration-service'
 import { RealArbitrationService } from '../lib/arbitration-service'
+import type { ArbitrationRuling } from '../lib/arbitration-prompts'
 import { RealLLMService } from '../lib/openrouter'
 import type { X402Service } from '../lib/x402'
 import { RealX402Service } from '../lib/x402'
@@ -1205,7 +1206,7 @@ escrow.post('/:id/dispute', async (c) => {
     return success(c, snakeToCamel<Escrow>(disputed))
   }
 
-  let ruling: { ruling: 'buyer_wins' | 'seller_wins'; rationale: string; confidence: number }
+  let ruling: ArbitrationRuling
   try {
     ruling = await arbitrationSvc.arbitrate({
       escrowId,

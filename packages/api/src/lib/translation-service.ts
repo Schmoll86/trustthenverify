@@ -23,6 +23,7 @@ export interface TranslationResult {
   crossValidatorModel: string | null
   crossValidation: ParsedCrossValidationResponse | null
   tier2Used: boolean
+  costCents: number
   errors?: string[]
 }
 
@@ -43,6 +44,7 @@ export async function translatePolicy(params: {
   let translatedClauses: TranslatorClause[] = []
   const errors: string[] = []
   let lastError = ''
+  let costCents = 0
 
   for (let attempt = 0; attempt < MAX_TRANSLATE_RETRIES; attempt++) {
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
@@ -62,12 +64,14 @@ export async function translatePolicy(params: {
 
     let raw: string
     try {
-      raw = await llm.complete({
+      const completion = await llm.complete({
         model: translatorModel,
         messages,
         maxTokens: 4096,
         temperature: 0.2,
       })
+      raw = completion.content
+      costCents += completion.costCents
     } catch (err) {
       lastError = err instanceof Error ? err.message : 'LLM call failed'
       errors.push(`Attempt ${attempt + 1}: ${lastError}`)
@@ -104,6 +108,7 @@ export async function translatePolicy(params: {
       crossValidatorModel: null,
       crossValidation: null,
       tier2Used: false,
+      costCents,
       errors,
     }
   }
@@ -118,7 +123,7 @@ export async function translatePolicy(params: {
 
   for (let attempt = 0; attempt <= MAX_CROSS_VALIDATE_RETRIES; attempt++) {
     try {
-      const raw = await llm.complete({
+      const completion = await llm.complete({
         model: crossValidatorModel,
         messages: [
           { role: 'user', content: crossValidationPrompt(intent, formalSpec, translatedClauses) },
@@ -126,8 +131,9 @@ export async function translatePolicy(params: {
         maxTokens: 4096,
         temperature: 0.2,
       })
+      costCents += completion.costCents
 
-      const parsed = parseCrossValidationResponse(raw)
+      const parsed = parseCrossValidationResponse(completion.content)
       if (parsed) {
         crossValidation = parsed
         break
@@ -147,6 +153,7 @@ export async function translatePolicy(params: {
       crossValidatorModel: crossValidatorModel,
       crossValidation,
       tier2Used,
+      costCents,
     }
   }
 
@@ -161,6 +168,7 @@ export async function translatePolicy(params: {
       crossValidatorModel: crossValidation ? crossValidatorModel : null,
       crossValidation,
       tier2Used,
+      costCents,
     }
   }
 
@@ -172,5 +180,6 @@ export async function translatePolicy(params: {
     crossValidatorModel: crossValidation ? crossValidatorModel : null,
     crossValidation,
     tier2Used,
+    costCents,
   }
 }

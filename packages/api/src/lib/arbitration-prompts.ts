@@ -20,6 +20,12 @@ export interface ArbitrationRuling {
   ruling: 'buyer_wins' | 'seller_wins'
   rationale: string
   confidence: number
+  /**
+   * Total USD cents consumed by the LLM call(s) that produced this ruling.
+   * Populated by the arbitration service from OpenRouter `usage.total_cost`.
+   * 0 when cost data is unavailable (not a fatal error).
+   */
+  costCents: number
 }
 
 export function arbitrationSystemPrompt(): string {
@@ -92,6 +98,7 @@ export function parseArbitrationRuling(raw: string): ArbitrationRuling | null {
       ruling: parsed.ruling,
       rationale: String(parsed.rationale ?? ''),
       confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+      costCents: 0,
     }
   } catch {
     return null

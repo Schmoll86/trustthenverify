@@ -3,7 +3,7 @@
  * Same pattern as mock-ai.ts.
  */
 
-import type { LLMService } from '../../lib/openrouter'
+import type { LLMCompletion, LLMService } from '../../lib/openrouter'
 
 export interface LLMCall {
   model: string
@@ -12,15 +12,21 @@ export interface LLMCall {
   temperature?: number
 }
 
+type MockResponse = string | LLMCompletion
+
+function normalize(r: MockResponse): LLMCompletion {
+  return typeof r === 'string' ? { content: r, costCents: 0 } : r
+}
+
 export function createMockLLM(): LLMService & {
   calls: LLMCall[]
   reset(): void
-  setResponse(response: string): void
-  setResponses(responses: string[]): void
+  setResponse(response: MockResponse): void
+  setResponses(responses: MockResponse[]): void
   setError(error: Error): void
 } {
   const calls: LLMCall[] = []
-  let responses: string[] = ['{}']
+  let responses: MockResponse[] = ['{}']
   let callIndex = 0
   let nextError: Error | null = null
 
@@ -31,11 +37,11 @@ export function createMockLLM(): LLMService & {
       callIndex = 0
       nextError = null
     },
-    setResponse(response: string) {
+    setResponse(response: MockResponse) {
       responses = [response]
       callIndex = 0
     },
-    setResponses(r: string[]) {
+    setResponses(r: MockResponse[]) {
       responses = r
       callIndex = 0
     },
@@ -58,7 +64,7 @@ export function createMockLLM(): LLMService & {
 
       const response = responses[callIndex % responses.length]
       callIndex++
-      return response
+      return normalize(response)
     },
   }
 }

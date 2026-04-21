@@ -170,6 +170,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'buyer_wins',
       rationale: 'Deliverable was not submitted',
       confidence: 0.95,
+      costCents: 0,
     })
 
     const res = await makeSignedRequest(
@@ -200,6 +201,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'seller_wins',
       rationale: 'Deliverable satisfies the spec',
       confidence: 0.85,
+      costCents: 0,
     })
 
     const res = await makeSignedRequest(
@@ -228,6 +230,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'buyer_wins',
       rationale: 'Test',
       confidence: 0.9,
+      costCents: 0,
     })
 
     const res = await makeSignedRequest(
@@ -311,6 +314,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'seller_wins',
       rationale: 'Seller is right',
       confidence: 0.9,
+      costCents: 0,
     })
 
     const res = await makeSignedRequest(
@@ -349,6 +353,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'buyer_wins',
       rationale: 'No delivery',
       confidence: 0.95,
+      costCents: 0,
     })
 
     // File dispute first
@@ -413,6 +418,7 @@ describe('Dispute Arbitration', () => {
       ruling: 'buyer_wins',
       rationale: 'Poor quality',
       confidence: 0.8,
+      costCents: 0,
     })
 
     const res = await makeSignedRequest(

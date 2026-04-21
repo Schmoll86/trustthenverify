@@ -20,6 +20,7 @@ export function createMockArbitration(): ArbitrationService & {
     ruling: 'buyer_wins',
     rationale: 'Mock ruling',
     confidence: 0.9,
+    costCents: 0,
   }
   let nextError: Error | null = null
 
