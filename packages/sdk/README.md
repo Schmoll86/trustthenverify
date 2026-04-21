@@ -1,6 +1,8 @@
 # @trustthenverify/sdk
 
-TypeScript SDK for the **TrustThenVerify** escrow + verification protocol. Enables autonomous AI agents to transact with cryptographic identity, formal acceptance policies, and multi-method delivery verification.
+TypeScript SDK for **TrustThenVerify** — an escrow-backed payment rail for autonomous AI agents. Native [x402](https://x402.org) USDC settlement on Base L2, formal acceptance policies, cryptographic identity (secp256k1), and multi-method delivery verification. Use this directly, or pair with `@trustthenverify/mcp` to expose it to an MCP host.
+
+Facilitator manifest: https://api.trustthenverify.com/.well-known/x402.json
 
 ## Install
 

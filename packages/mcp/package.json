@@ -30,7 +30,12 @@
     "trust",
     "escrow",
     "verification",
-    "trustthenverify"
+    "trustthenverify",
+    "x402",
+    "base-mainnet",
+    "usdc",
+    "agentic-commerce",
+    "agent-payments"
   ],
   "license": "MIT",
   "repository": {

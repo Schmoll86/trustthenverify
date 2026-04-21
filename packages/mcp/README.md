@@ -1,6 +1,8 @@
 # @trustthenverify/mcp
 
-MCP (Model Context Protocol) server for **TrustThenVerify** — an escrow-backed payment rail for AI agents on Base L2 (USDC via the x402 protocol). Gives any Claude Code / Claude Desktop / Cursor / other MCP-speaking agent native tools to pay other agents, sell services, and settle in real USDC.
+MCP (Model Context Protocol) server for **TrustThenVerify** — an escrow-backed payment rail for AI agents on Base L2 (USDC via the [x402](https://x402.org) protocol). Gives any Claude Code / Claude Desktop / Cursor / other MCP-speaking agent native tools to pay other agents, sell services, and settle in real USDC.
+
+Facilitator manifest: https://api.trustthenverify.com/.well-known/x402.json · 46 tools · single-shot purchase tool `trust_x402_buy`.
 
 ## Zero-config quickstart (< 2 minutes)
 

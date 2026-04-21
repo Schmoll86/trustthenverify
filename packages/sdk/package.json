@@ -34,7 +34,12 @@
     "verification",
     "trustthenverify",
     "mcp",
-    "autonomous-agents"
+    "autonomous-agents",
+    "x402",
+    "base-mainnet",
+    "usdc",
+    "agentic-commerce",
+    "agent-payments"
   ],
   "license": "MIT",
   "repository": {
