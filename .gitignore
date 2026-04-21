@@ -7,3 +7,4 @@ node_modules/
 packages/contracts/.env
 .env
 .commerce-trial-state.json
+.x402-trial-state.json
