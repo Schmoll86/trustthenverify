@@ -5,7 +5,7 @@
  * and says "should we use this?" Discover the protocol from scratch, then
  * prove it out with 4 real-money transactions on production.
  *
- * Budget: ~$7 total (all Stripe rails)
+ * Budget: ~$2.50 total (all Stripe rails) — 4× $0.50 escrows
  *
  * Usage:
  *   npx tsx packages/e2e/live-commerce-trial.ts
@@ -375,9 +375,9 @@ async function phase3Escrows(ctx: {
   console.log('PHASE 3: EXECUTE 4 ESCROWS')
   console.log('All real money. All production.\n')
 
-  // ── Task 1: Simple, automated_reasoning ($1.00) ──────────────────────────
+  // ── Task 1: Simple, automated_reasoning ($0.50) ──────────────────────────
 
-  log('3.1', 'TASK 1: Cloud Providers List ($1.00, automated_reasoning)')
+  log('3.1', 'TASK 1: Cloud Providers List ($0.50, automated_reasoning)')
   console.log('  Creating policy with 5 constraints (formalSpec provided directly)...')
 
   // Provide formalSpec directly to skip NL translation and go straight to validated
@@ -406,7 +406,7 @@ async function phase3Escrows(ctx: {
   log('3.1', 'Proposing escrow...')
   const escrow1 = await buyerProto.proposeEscrow({
     seller: ctx.seller.publicKey,
-    amountCents: 100,
+    amountCents: 50,
     collateralRatio: 0.5,
     taskSpec: {
       task: 'List 3 major cloud providers with their name, a one-line pricing summary, and a URL to their pricing page.',
@@ -444,7 +444,7 @@ async function phase3Escrows(ctx: {
   results.push({
     task: 'Cloud Providers List',
     escrowId: escrow1.id,
-    amountCents: 100,
+    amountCents: 50,
     method: 'automated_reasoning',
     finalStatus: escrow1Final.status,
     verificationResult: verify1.result,
@@ -494,10 +494,10 @@ async function phase3Escrows(ctx: {
     finalStatus: escrow2Confirmed.status,
   })
 
-  // ── Task 3: Challenging, automated_reasoning ($2.00, 11 constraints) ─────
+  // ── Task 3: Challenging, automated_reasoning ($0.50, 11 constraints) ─────
 
   hr()
-  log('3.3', 'TASK 3: AI Agent Frameworks Research ($2.00, automated_reasoning, complex policy)')
+  log('3.3', 'TASK 3: AI Agent Frameworks Research ($0.50, automated_reasoning, complex policy)')
 
   const policy3Res = await authedFetch('POST', '/v2/policies', {
     name: 'Research Report Verification',
@@ -527,7 +527,7 @@ async function phase3Escrows(ctx: {
 
   const escrow3 = await buyerProto.proposeEscrow({
     seller: ctx.seller.publicKey,
-    amountCents: 200,
+    amountCents: 50,
     collateralRatio: 0.5,
     taskSpec: {
       task: 'Write a comprehensive research report on AI agent frameworks for autonomous task execution. Cover at least 3 major frameworks, their architectures, use cases, and trade-offs. Include cited sources.',
@@ -610,21 +610,21 @@ async function phase3Escrows(ctx: {
   results.push({
     task: 'AI Agent Frameworks Research',
     escrowId: escrow3.id,
-    amountCents: 200,
+    amountCents: 50,
     method: 'automated_reasoning',
     finalStatus: escrow3Final.status,
     verificationResult: verify3.result,
   })
 
-  // ── Task 4: Challenging + Arbitration ($2.00) ────────────────────────────
+  // ── Task 4: Challenging + Arbitration ($0.50) ────────────────────────────
 
   hr()
-  log('3.4', 'TASK 4: Persuasive Pitch → ARBITRATION ($2.00, buyer_confirm, dispute)')
+  log('3.4', 'TASK 4: Persuasive Pitch → ARBITRATION ($0.50, buyer_confirm, dispute)')
   console.log('  This escrow will be disputed. The LLM judge decides.')
 
   const escrow4 = await buyerProto.proposeEscrow({
     seller: ctx.seller.publicKey,
-    amountCents: 200,
+    amountCents: 50,
     collateralRatio: 0.5,
     taskSpec: {
       task: 'Write a compelling, persuasive pitch for corporate renewable energy adoption. Must be data-driven with specific ROI projections showing payback periods and cost savings. The tone must be urgent and motivating, not merely informational.',
@@ -696,7 +696,7 @@ In conclusion, renewable energy represents a growing area of corporate energy st
   results.push({
     task: 'Persuasive Pitch (DISPUTED)',
     escrowId: escrow4.id,
-    amountCents: 200,
+    amountCents: 50,
     method: 'buyer_confirm → arbitration',
     finalStatus: escrow4Final.status,
     disputeRuling: escrow4Final.status === 'resolved' ? 'ruled (check Supabase for details)' : 'pending',
@@ -829,7 +829,7 @@ async function main() {
   console.log('═'.repeat(72))
   console.log('TrustThenVerify — New Agent Real-Commerce Trial')
   console.log('4 production escrows, real money, Stripe rails')
-  console.log('Budget: ~$7 | Date: ' + new Date().toISOString().split('T')[0])
+  console.log('Budget: ~$2.50 | Date: ' + new Date().toISOString().split('T')[0])
   console.log('═'.repeat(72))
 
   // Phase 1: Discovery
