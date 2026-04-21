@@ -80,6 +80,7 @@ const EXPECTED_TOOLS = [
   'trust_x402_balance',
   'trust_x402_address',
   'trust_register_webhook',
+  'trust_x402_buy',
 ]
 
 // ---------------------------------------------------------------------------
@@ -107,9 +108,9 @@ beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe('MCP tool registration', () => {
-  it('registers exactly 45 tools', async () => {
+  it('registers exactly 46 tools', async () => {
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(45)
+    expect(tools).toHaveLength(46)
   })
 
   it('registers all expected tool names', async () => {

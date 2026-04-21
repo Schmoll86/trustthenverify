@@ -27,6 +27,18 @@ import { publicKeyToAddress } from './channels.js'
 export { signChannelPayment, verifyChannelPayment, publicKeyToAddress, encodeChannelClose } from './channels.js'
 export type { ChannelPayment } from './channels.js'
 
+import { sendUsdc, waitForReceipt, BASE_MAINNET_USDC } from './eth-tx.js'
+export {
+  sendUsdc,
+  waitForReceipt,
+  signAndSendTransaction,
+  encodeErc20Transfer,
+  privateKeyToEthAddress,
+  BASE_MAINNET_CHAIN_ID,
+  BASE_MAINNET_USDC,
+  BASE_PUBLIC_RPC,
+} from './eth-tx.js'
+
 const DEFAULT_API_URL = 'https://api.trustthenverify.com/v2'
 const SANDBOX_API_URL = 'https://sandbox.trustthenverify.com/v2'
 
@@ -139,6 +151,7 @@ export interface Escrow {
   disputeResolution: 'burn' | 'arbitrate'
   status: 'proposed' | 'accepted' | 'funded' | 'active' | 'delivered' | 'released' | 'failed' | 'disputed' | 'burned' | 'resolved' | 'expired'
   proof: string | null
+  deliverable: Record<string, unknown> | null
   createdAt: string
   fundedAt: string | null
   completedAt: string | null
@@ -922,6 +935,56 @@ export class TrustProtocol {
     const json = await res.json() as { data: { address: string; balance: string; balanceRaw: string }; error?: { message: string } }
     if (!res.ok) throw new Error(json.error?.message ?? `Request failed: ${res.status}`)
     return json.data
+  }
+
+  /**
+   * Send USDC on Base L2 to the x402 gateway. Uses this SDK's keypair to sign.
+   * Returns txHash but does NOT call /x402-pay — use payX402Escrow for that.
+   *
+   * Supply `gatewayAddress` from the x402PaymentInstructions on a prior
+   * proposeEscrow response.
+   */
+  async sendUsdcToGateway(params: {
+    gatewayAddress: string
+    amountUsdcRaw: bigint
+    rpcUrl?: string
+    chainId?: number
+  }): Promise<{ txHash: string }> {
+    return sendUsdc({
+      privateKey: this.privateKey,
+      to: params.gatewayAddress,
+      amountUsdcRaw: params.amountUsdcRaw,
+      chainId: params.chainId,
+      rpcUrl: params.rpcUrl,
+    })
+  }
+
+  /**
+   * End-to-end x402 payment: send USDC on-chain, wait for receipt, then notify
+   * the API so the escrow transitions to 'active' and the macaroon is minted.
+   *
+   * Throws if the USDC tx reverts or isn't mined within receiptTimeoutMs.
+   * Idempotent on the TTV side — retrying with the same txHash returns the
+   * same state.
+   */
+  async payX402Escrow(params: {
+    escrowId: string
+    instructions: X402PaymentInstructions
+    rpcUrl?: string
+    receiptTimeoutMs?: number
+  }): Promise<{ txHash: string; escrow: Escrow & { x402Macaroon: string } }> {
+    const { txHash } = await this.sendUsdcToGateway({
+      gatewayAddress: params.instructions.gatewayAddress,
+      amountUsdcRaw: BigInt(params.instructions.amountUsdcRaw),
+      rpcUrl: params.rpcUrl,
+      chainId: params.instructions.chainId,
+    })
+    await waitForReceipt(txHash, {
+      rpcUrl: params.rpcUrl,
+      deadlineMs: params.receiptTimeoutMs ?? 60_000,
+    })
+    const escrow = await this.x402Pay(params.escrowId, txHash)
+    return { txHash, escrow }
   }
 
   /** Register webhook URL for instant notifications. */

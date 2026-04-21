@@ -10,6 +10,7 @@ import {
   listMarketplacePolicies,
   type VerificationMethod,
   type FundingMode,
+  type Escrow,
 } from '@trustthenverify/sdk'
 
 // ---------------------------------------------------------------------------
@@ -43,7 +44,7 @@ function tool(
 export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer {
   const server = new McpServer({
     name: 'trust-then-verify',
-    version: '0.2.0',
+    version: '0.3.0',
   })
 
   // 1. trust_search_agents
@@ -634,6 +635,81 @@ export function createServer(protocol: TrustProtocol, apiUrl: string): McpServer
     async ({ url }) => {
       try { return ok(await protocol.registerWebhook(url)) }
       catch (err) { return fail(err) }
+    },
+  )
+
+  // 46. trust_x402_buy — one-shot end-to-end purchase
+  //
+  // The single tool an agent reaches for. Wraps propose → send USDC → x402-pay
+  // → poll for delivered → confirm → return deliverable. No manual wallet
+  // tooling, no ethers.js, no receipt polling in agent code.
+  tool(server,
+    'trust_x402_buy',
+    'Buy a service from another agent end-to-end via x402 USDC on Base L2. Handles the full dance: escrow proposal, USDC payment, settlement on delivery. Returns the delivered work and payout tx hash. Your agent must be funded with USDC + a tiny amount of ETH on Base (check trust_x402_balance first).',
+    {
+      seller: z.string().describe('Seller agent public key (secp256k1, hex)'),
+      amountCents: z.number().int().positive().describe('Purchase price in US cents (e.g. 50 = $0.50). Agent must hold at least this much USDC on Base.'),
+      taskSpec: z.record(z.string(), z.any()).describe('Task description as a JSON object. Seller reads this to know what to deliver. Example: { "task": "summarize", "url": "https://..." }'),
+      collateralRatio: z.number().min(0).max(1).optional().describe('Seller collateral as a fraction of price (default 0 — no collateral for frictionless small purchases)'),
+      maxWaitSeconds: z.number().int().positive().optional().describe('How long to wait for the seller to deliver before timing out (default 120s)'),
+      rpcUrl: z.string().optional().describe('Custom Base RPC URL (default https://mainnet.base.org). Use your own Alchemy/Infura endpoint for higher rate limits.'),
+    },
+    async ({ seller, amountCents, taskSpec, collateralRatio, maxWaitSeconds, rpcUrl }) => {
+      try {
+        // 1. Propose x402 escrow
+        const proposed = await protocol.proposeEscrow({
+          seller,
+          amountCents,
+          collateralRatio: collateralRatio ?? 0,
+          taskSpec,
+          verificationMethod: 'buyer_confirm',
+          fundingMode: 'x402',
+        })
+        const escrowId = proposed.id
+        const instructions = proposed.x402PaymentInstructions
+        if (!instructions) {
+          throw new Error('API did not return x402PaymentInstructions — is the seller configured for x402?')
+        }
+
+        // 2. Pay on-chain + notify API
+        const { txHash: paymentTxHash } = await protocol.payX402Escrow({
+          escrowId,
+          instructions,
+          rpcUrl,
+        })
+
+        // 3. Wait for seller to deliver
+        const deadline = Date.now() + (maxWaitSeconds ?? 120) * 1000
+        let delivered: Escrow | null = null
+        while (Date.now() < deadline) {
+          const current = await protocol.getEscrow(escrowId)
+          if (current.status === 'delivered') {
+            delivered = current
+            break
+          }
+          if (current.status === 'failed' || current.status === 'disputed') {
+            throw new Error(`Escrow ${escrowId} ended in status '${current.status}' before delivery`)
+          }
+          await new Promise((r) => setTimeout(r, 3_000))
+        }
+        if (!delivered) {
+          throw new Error(`Seller did not deliver within ${maxWaitSeconds ?? 120}s. Escrow ${escrowId} is still pending — buyer can call trust_confirm_delivery later, or trust_dispute if the seller abandoned.`)
+        }
+
+        // 4. Confirm delivery → triggers settlement
+        const confirmed = await protocol.confirmDelivery(escrowId)
+
+        return ok({
+          escrowId,
+          status: confirmed.status,
+          paymentTxHash,
+          payoutTxHash: confirmed.x402SellerPayoutTx ?? null,
+          deliverable: delivered.deliverable,
+          amountCents,
+        })
+      } catch (err) {
+        return fail(err)
+      }
     },
   )
 

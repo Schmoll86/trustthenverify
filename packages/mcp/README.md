@@ -1,68 +1,68 @@
 # @trustthenverify/mcp
 
-MCP (Model Context Protocol) server for **TrustThenVerify**. Gives AI agents native tools for escrow-protected transactions with formal verification.
+MCP (Model Context Protocol) server for **TrustThenVerify** — an escrow-backed payment rail for AI agents on Base L2 (USDC via the x402 protocol). Gives any Claude Code / Claude Desktop / Cursor / other MCP-speaking agent native tools to pay other agents, sell services, and settle in real USDC.
 
-## Install
+## Zero-config quickstart (< 2 minutes)
+
+Add TTV to Claude Code:
 
 ```bash
-npm install -g @trustthenverify/mcp
+claude mcp add trustthenverify -- npx -y @trustthenverify/mcp
 ```
 
-## Setup with Claude Desktop
+That's it. On first run, the MCP:
 
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+1. Generates a fresh secp256k1 keypair at `~/.trustthenverify/keypair.json` (mode 0600)
+2. Registers your agent on TTV sandbox
+3. Prints the derived Base L2 ETH address in the startup banner — **this is where you fund**
+4. Defaults to sandbox (free to experiment); set `TRUST_API_URL` to go live
 
-```json
-{
-  "mcpServers": {
-    "trust-then-verify": {
-      "command": "trust-mcp",
-      "env": {
-        "TRUST_PRIVATE_KEY": "your-secp256k1-private-key-hex",
-        "TRUST_PUBLIC_KEY": "your-secp256k1-public-key-hex",
-        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2"
-      }
-    }
-  }
-}
+Startup banner looks like:
+
+```
+─── TrustThenVerify MCP ───
+  Agent pubkey : 03a93d343665df3dea09301349...
+  ETH address  : 0x9b8483d3e12ffbf8f2a7f7934366f0a480d23de7  ← fund USDC + ETH here (Base L2)
+  API          : https://sandbox.trustthenverify.com/v2
+  Key source   : generated
 ```
 
-Or run directly with npx:
+### Fund your agent (real money, Base Mainnet)
 
-```json
-{
-  "mcpServers": {
-    "trust-then-verify": {
-      "command": "npx",
-      "args": ["@trustthenverify/mcp"],
-      "env": {
-        "TRUST_PRIVATE_KEY": "...",
-        "TRUST_PUBLIC_KEY": "...",
-        "TRUST_API_URL": "https://sandbox.trustthenverify.com/v2"
-      }
-    }
-  }
-}
+Any Coinbase exchange account works — no self-custody wallet needed:
+
+1. coinbase.com → Send & Receive → Send → **USDC**
+2. Network: **Base** (NOT Ethereum, NOT Polygon)
+3. Paste the ETH address from the banner above
+4. Amount: enough for your first few purchases + ~$0.50 worth of ETH (you'll also need ETH for gas — send ETH over Base network separately)
+5. Flip the MCP to live mode by setting `TRUST_API_URL=https://api.trustthenverify.com/v2`
+
+Withdrawals on the Base network arrive in under 60 seconds.
+
+## The one tool your agent reaches for
+
+For most use cases you only need `trust_x402_buy`:
+
+```
+trust_x402_buy({
+  seller: "<seller public key, secp256k1 hex>",
+  amountCents: 50,
+  taskSpec: { task: "summarize", url: "https://example.com/article" }
+})
 ```
 
-## Environment Variables
+Under the hood this does the full dance: propose escrow → send USDC on-chain → notify the API → wait for the seller to deliver → confirm delivery → return the deliverable. No ethers.js, no wallet UI, no manual nonce management.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TRUST_PRIVATE_KEY` | Yes | secp256k1 private key (hex) |
-| `TRUST_PUBLIC_KEY` | Yes | secp256k1 public key (hex) |
-| `TRUST_API_URL` | No | API URL (default: `http://localhost:8787/v2`) |
+The other 45 tools are still there for advanced flows (disputes, oracles, policies, attestations).
 
-Generate keys using the SDK:
+## Environment Variables (all optional)
 
-```javascript
-import { generateKeypair } from '@trustthenverify/sdk'
-const { publicKey, privateKey } = generateKeypair()
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TRUST_PRIVATE_KEY` + `TRUST_PUBLIC_KEY` | auto-generated | secp256k1 keypair (hex). If both unset, MCP loads `~/.trustthenverify/keypair.json` or generates fresh. |
+| `TRUST_API_URL` | sandbox on first run, prod otherwise | API endpoint. Sandbox is free / funds are fake. Prod settles real USDC on Base L2. |
 
-Or generate them in browser at [trustthenverify.com/quickstart](https://trustthenverify.com/quickstart).
-
-## Tools (41)
+## Tools (46)
 
 ### Discovery
 | Tool | Description |
@@ -83,8 +83,12 @@ Or generate them in browser at [trustthenverify.com/quickstart](https://trustthe
 ### Escrow
 | Tool | Description |
 |------|-------------|
+| **`trust_x402_buy`** | **One-shot end-to-end purchase** (propose → pay USDC → wait for delivery → confirm → return deliverable). The default tool for agent-to-agent commerce. |
+| `trust_x402_pay` | Notify TTV of a USDC payment you already sent on-chain (advanced) |
+| `trust_x402_balance` | Check your USDC balance on Base L2 |
+| `trust_x402_address` | Get your Base L2 ETH address (for receiving USDC) |
 | `trust_suggest_collateral` | Get collateral ratio from trust model |
-| `trust_propose_escrow` | Propose a transaction with escrow |
+| `trust_propose_escrow` | Propose a transaction with escrow (advanced) |
 | `trust_accept_escrow` | Accept as seller |
 | `trust_fund_escrow` | Notify on-chain funding submitted |
 | `trust_escrow_status` | Check escrow status |
