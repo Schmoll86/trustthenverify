@@ -787,7 +787,18 @@ escrow.post('/:id/deliver', async (c) => {
             x402_settlement_fee_cents: feeCents,
           }).eq('id', escrowId)
         } catch (settleErr) {
-          console.error('[escrow-deliver] x402 settlement failed (deferred):', (settleErr as Error).message)
+          // Auto-verification passed but settlement tx didn't confirm. Record
+          // the tx hash for audit and surface the failure. Don't mark released.
+          const err = settleErr as { txHash?: string; code?: string; message?: string }
+          if (err.txHash) {
+            await db.from('escrows').update({ x402_seller_payout_tx: err.txHash }).eq('id', escrowId)
+          }
+          console.error('[escrow-deliver] x402 settlement failed:', err.message, err.txHash ?? '(no tx)')
+          return error(
+            c, 502, err.code ?? 'SETTLEMENT_FAILED',
+            `x402 settlement did not confirm: ${err.message ?? 'unknown error'}. ` +
+            `Escrow remains in 'delivered' — the gateway will retry settlement or an operator can trigger it manually.`,
+          )
         }
       } else if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
         const onchain = getOnchain(c as unknown as { env: Env; get(key: 'onchain'): OnchainService | undefined })
@@ -943,7 +954,19 @@ escrow.post('/:id/confirm', async (c) => {
         x402_settlement_fee_cents: feeCents,
       }).eq('id', escrowId)
     } catch (settleErr) {
-      console.error('[escrow-confirm] x402 settlement failed (deferred):', (settleErr as Error).message)
+      // Settlement broadcast/confirm failed. Record the attempted tx hash (if any)
+      // for audit, but do NOT mark the escrow 'released' — funds didn't actually
+      // move to the seller. Escrow stays in 'delivered' so /confirm can be retried.
+      const err = settleErr as { txHash?: string; code?: string; message?: string }
+      if (err.txHash) {
+        await db.from('escrows').update({ x402_seller_payout_tx: err.txHash }).eq('id', escrowId)
+      }
+      console.error('[escrow-confirm] x402 settlement failed:', err.message, err.txHash ?? '(no tx)')
+      return error(
+        c, 502, err.code ?? 'SETTLEMENT_FAILED',
+        `x402 settlement did not confirm: ${err.message ?? 'unknown error'}. ` +
+        `Escrow remains in 'delivered' — retry /confirm after investigating the on-chain tx.`,
+      )
     }
   } else if (escrowRow.funding_mode === 'onchain' && escrowRow.contract_address) {
     // On-chain: buyer confirms directly on contract (this API call just records the verification)

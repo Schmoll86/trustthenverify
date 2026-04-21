@@ -53,8 +53,13 @@ const GATEWAY_ADDRESS = '0x2299244F6c99E59A1f8197509030428030aaaff9'
 
 const STATE_FILE = path.join(import.meta.dirname ?? '.', '.x402-trial-state.json')
 
+// Trial size — set TRIAL_AMOUNT_CENTS to run on a smaller budget (e.g. re-using
+// residual from a prior run). Default 100 cents = $1 / 1 USDC.
+const TRIAL_AMOUNT_CENTS = parseInt(process.env.TRIAL_AMOUNT_CENTS ?? '100', 10)
+const TRIAL_AMOUNT_USDC_RAW = BigInt(TRIAL_AMOUNT_CENTS) * 10_000n // cents → 6-dec USDC
+
 // Required for Phase 2 preflight.
-const MIN_BUYER_USDC_RAW = 1_000_000n          // 1.00 USDC (6-decimal)
+const MIN_BUYER_USDC_RAW = TRIAL_AMOUNT_USDC_RAW // must equal the escrow amount
 const MIN_BUYER_ETH_WEI  = 300_000_000_000_000n // 0.0003 ETH
 const MIN_GATEWAY_ETH_WEI = 1_000_000_000_000_000n // 0.001 ETH (warn threshold)
 
@@ -277,6 +282,10 @@ async function phase2Preflight(state: TrialState): Promise<void> {
   hr()
   console.log('PHASE 2: PREFLIGHT (on-chain balance checks)')
 
+  // Resume path: payment already made, buyer USDC will be below MIN_BUYER_USDC_RAW
+  // by design (it's already with the gateway). Skip the funding-gate check.
+  const resumingPostPay = !!state.paymentTxHash
+
   const buyerAddr = state.buyerEthAddress!
   const [buyerUsdc, buyerEth, gatewayUsdc, gatewayEth] = await Promise.all([
     usdcBalanceOf(buyerAddr),
@@ -295,7 +304,7 @@ async function phase2Preflight(state: TrialState): Promise<void> {
   }
 
   const errors: string[] = []
-  if (buyerUsdc < MIN_BUYER_USDC_RAW) {
+  if (!resumingPostPay && buyerUsdc < MIN_BUYER_USDC_RAW) {
     errors.push(`buyer EOA has ${buyerUsdc} USDC-raw, need ≥ ${MIN_BUYER_USDC_RAW} (1 USDC)`)
   }
   if (buyerEth < MIN_BUYER_ETH_WEI) {
@@ -305,9 +314,11 @@ async function phase2Preflight(state: TrialState): Promise<void> {
     throw new Error('Preflight failed:\n  - ' + errors.join('\n  - '))
   }
 
-  state.phaseReached = 'funded'
-  saveState(state)
-  log('2', 'Preflight passed')
+  if (!resumingPostPay) {
+    state.phaseReached = 'funded'
+    saveState(state)
+  }
+  log('2', resumingPostPay ? 'Preflight passed (resume mode — buyer already paid)' : 'Preflight passed')
 }
 
 // ── Phase 3: Propose escrow ─────────────────────────────────────────────────
@@ -356,10 +367,10 @@ async function phase3Propose(state: TrialState): Promise<X402Instr> {
     apiUrl: API_URL,
   })
 
-  log('3', 'Proposing x402 escrow (100 cents = $1.00, buyer_confirm)...')
+  log('3', `Proposing x402 escrow (${TRIAL_AMOUNT_CENTS} cents = $${(TRIAL_AMOUNT_CENTS / 100).toFixed(2)}, buyer_confirm)...`)
   const result = await buyerProto.proposeEscrow({
     seller: state.seller.publicKey,
-    amountCents: 100,
+    amountCents: TRIAL_AMOUNT_CENTS,
     collateralRatio: 0.5,
     taskSpec: {
       task: 'x402 trial: echo this string',
@@ -412,6 +423,12 @@ async function phase3Propose(state: TrialState): Promise<X402Instr> {
 async function phase4Pay(state: TrialState, instr: X402Instr): Promise<void> {
   hr()
   console.log('PHASE 4: PAY — sending USDC on Base Mainnet (IRREVERSIBLE)')
+
+  if (state.paymentTxHash) {
+    log('4', `Already paid in previous run: ${state.paymentTxHash}`)
+    detail('Basescan', `https://basescan.org/tx/${state.paymentTxHash}`)
+    return
+  }
 
   if (process.env.DRY_RUN === '1') {
     console.log('\nDRY_RUN=1 — stopping before payment tx. Exiting cleanly.')
@@ -499,17 +516,11 @@ async function phase4Pay(state: TrialState, instr: X402Instr): Promise<void> {
 
 async function phase5Execute(state: TrialState): Promise<void> {
   hr()
-  console.log('PHASE 5: ACCEPT → DELIVER → CONFIRM → SETTLE')
+  console.log('PHASE 5: DELIVER → CONFIRM → SETTLE')
 
-  // Seller accepts
-  log('5', 'Seller accepting escrow...')
-  const { status: accStatus, data: accData, error: accErr } = await authedFetch<Record<string, unknown>>(
-    'POST', `/v2/escrow/${state.escrowId}/accept`, {}, state.seller,
-  )
-  if (accStatus !== 200) {
-    throw new Error(`Accept failed (${accStatus}): ${JSON.stringify(accErr)}`)
-  }
-  detail('Escrow status', accData?.status as string)
+  // x402 escrows transition proposed → active directly on x402-pay; no accept step.
+  // (See packages/api/src/routes/escrow.ts:445 — "x402 escrows are funded via POST
+  // /escrow/:id/x402-pay, not accept".)
 
   // Seller delivers
   log('5', 'Seller delivering...')

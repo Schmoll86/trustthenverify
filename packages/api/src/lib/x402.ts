@@ -249,15 +249,43 @@ export class RealX402Service implements X402Service {
     const selector = SELECTORS['transfer(address,uint256)']
     const calldata = buildCallData(selector, encodeAddress(sellerAddress), encodeUint256(amountUsdc))
 
-    // Send signed transaction to USDC contract
-    const txHash = await this.sendTransaction(this.usdcContract, '0x' + calldata)
+    // buildCallData already returns a 0x-prefixed hex string — do NOT prepend
+    // another '0x' or hexToRlpBytes decodes "0x" as a leading 0x00 byte and the
+    // USDC selector shifts right, causing every settlement to revert on-chain.
+    // Caught by the 2026-04-21 live x402 trial (tx 0xcf0d4d...).
+    const txHash = await this.sendTransaction(this.usdcContract, calldata)
+
+    // Wait for the receipt. If the tx reverts (or doesn't land), surface that
+    // to the caller so the escrow is NOT marked released on a failed payout.
+    // Base blocks are ~2s; 20s cap ≈ 10 blocks of headroom.
+    const deadline = Date.now() + 20_000
+    let receipt: { status?: string } | null = null
+    while (Date.now() < deadline) {
+      receipt = await this.rpcCall('eth_getTransactionReceipt', [txHash]) as { status?: string } | null
+      if (receipt) break
+      await new Promise((r) => setTimeout(r, 2_000))
+    }
+
+    if (!receipt) {
+      throw Object.assign(new Error(`Settlement tx ${txHash} not mined within 20s`), {
+        txHash,
+        code: 'SETTLEMENT_PENDING',
+      })
+    }
+    if (receipt.status !== '0x1') {
+      throw Object.assign(new Error(`Settlement tx ${txHash} reverted on-chain (receipt status ${receipt.status})`), {
+        txHash,
+        code: 'SETTLEMENT_REVERTED',
+      })
+    }
+
     return { txHash }
   }
 
   async checkBalance(address: string): Promise<{ balance: string; balanceRaw: string }> {
     const selector = SELECTORS['balanceOf(address)']
     const calldata = buildCallData(selector, encodeAddress(address))
-    const result = await this.ethCall(this.usdcContract, '0x' + calldata)
+    const result = await this.ethCall(this.usdcContract, calldata)
     const raw = BigInt(result)
     const balance = (Number(raw) / 10 ** USDC_DECIMALS).toFixed(2)
     return { balance, balanceRaw: raw.toString() }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { functionSelector, SELECTORS } from '../lib/abi'
+import { functionSelector, SELECTORS, buildCallData, encodeAddress, encodeUint256 } from '../lib/abi'
+import { hexToRlpBytes } from '../lib/rlp'
 
 describe('ABI function selectors', () => {
   it('computes correct keccak256 selector for fund()', async () => {
@@ -49,5 +50,35 @@ describe('ABI function selectors', () => {
       const computed = await functionSelector(signature)
       expect(computed, `Selector mismatch for ${signature}`).toBe(expected)
     }
+  })
+
+  // Regression: 2026-04-21 live x402 trial caught "0x0x"-prefixed calldata
+  // landing on-chain as 0x00a9059cbb... — unknown selector → revert. Root
+  // cause: caller prepended another '0x' to buildCallData()'s already-prefixed
+  // output, and hexToRlpBytes silently decoded the extra "0x" as byte 0x00.
+  // This test asserts the end-to-end result: bytes fed into the tx input
+  // MUST start with the real 4-byte function selector, never a spurious 0x00.
+  it('settlement calldata decodes to selector-first bytes (no leading 0x00)', () => {
+    const calldata = buildCallData(
+      SELECTORS['transfer(address,uint256)'],
+      encodeAddress('0xe93aea7fc6f7a24e02b6be584d30b9c3386876cb'),
+      encodeUint256(990_000n),
+    )
+    const bytes = hexToRlpBytes(calldata)
+    expect(bytes.length).toBe(4 + 32 + 32)
+    expect(Array.from(bytes.slice(0, 4))).toEqual([0xa9, 0x05, 0x9c, 0xbb])
+    expect(bytes[0]).not.toBe(0x00)
+  })
+
+  it('double-0x-prefixed input would produce the bug signature (documents the trap)', () => {
+    // This test proves WHY the bug happened: hexToRlpBytes is permissive about
+    // a doubled "0x" prefix and silently emits a leading zero byte. Anyone
+    // tempted to re-introduce '0x' + buildCallData(...) will see this test
+    // and understand the failure mode on-chain.
+    const good = buildCallData(SELECTORS['transfer(address,uint256)'], encodeAddress('0x' + '11'.repeat(20)), encodeUint256(1n))
+    const bad = '0x' + good // the bug — doubled 0x
+    const badBytes = hexToRlpBytes(bad)
+    expect(badBytes[0]).toBe(0x00) // NOT what we want — documents the hazard
+    expect(Array.from(badBytes.slice(0, 5))).toEqual([0x00, 0xa9, 0x05, 0x9c, 0xbb])
   })
 })
