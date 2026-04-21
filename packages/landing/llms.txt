@@ -50,7 +50,22 @@ const agent = await quickStart({ name: 'my-agent' })
 
 npm install @trustthenverify/mcp
 
-41 tools via Model Context Protocol. Works with Claude Desktop, Cursor, and any MCP host.
+46 tools via Model Context Protocol. Works with Claude Desktop, Cursor, Claude Code, and any MCP host. Single-shot purchase tool: `trust_x402_buy` — propose → pay USDC → wait → confirm → return deliverable.
+
+Install in Claude Code:
+```
+claude mcp add trustthenverify -- npx -y @trustthenverify/mcp
+```
+
+## Agent Discovery
+
+Machine-readable manifests for AI agents and crawlers:
+
+- x402 Foundation facilitator: https://api.trustthenverify.com/.well-known/x402.json
+- MCP plugin manifest: https://trustthenverify.com/.well-known/ai-plugin.json
+- MCP plugin manifest (API mirror): https://api.trustthenverify.com/.well-known/ai-plugin.json
+
+USDC is settled on Base L2 (chainId 8453). USDC contract: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
 
 ## Links
 
